@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<link rel="manifest" href="manifest.json">
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js")}</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Forex Assist v2.2</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background:#0B1220; color:#E5E7EB; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+.app { max-width:480px; margin:0 auto; min-height:100vh; }
+.header { position:sticky; top:0; z-index:20; background:rgba(11,18,32,0.85); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:16px 16px 12px; border-bottom:1px solid #1f2937; }
+.header h1 { margin:0; font-size:26px; font-weight:800; letter-spacing:-0.5px; }
+.live-status { display:flex; align-items:center; gap:8px; margin-top:6px; font-size:12px; font-weight:700; color:#9CA3AF; letter-spacing:0.6px; }
+.dot { width:9px; height:9px; border-radius:50%; background:#EF4444; position:relative; transition:background 0.3s; }
+.dot.live { background:#10B981; }
+.dot.live::after { content:''; position:absolute; inset:-4px; border-radius:50%; border:2px solid #10B981; opacity:0.6; animation:pulse 2s infinite; }
+@keyframes pulse { 0%{transform:scale(0.8);opacity:0.7}70%{transform:scale(1.7);opacity:0}100%{transform:scale(0.8);opacity:0} }
+#pullIndicator { position:absolute; top:68px; right:16px; font-size:11px; color:#64748b; opacity:0; transition:opacity 0.2s; }
+
+main { padding:16px; padding-bottom:90px; }
+.btn-update { width:100%; background:#2563EB; color:white; border:none; border-radius:16px; padding:16px; font-size:16px; font-weight:800; letter-spacing:0.4px; box-shadow:0 8px 20px rgba(37,99,235,0.25), inset 0 1px 0 rgba(255,255,255,0.1); transition:transform 0.08s, opacity 0.2s; margin-bottom:10px; }
+.btn-update:active { transform:scale(0.98); }
+.btn-update:disabled { opacity:0.6; }
+
+.status-msg { text-align:center; font-size:12px; color:#9CA3AF; margin:0 0 16px; min-height:16px; }
+
+.pills { display:flex; gap:8px; overflow-x:auto; padding:2px 0 4px; margin-bottom:18px; scrollbar-width:none; }
+.pills::-webkit-scrollbar { display:none; }
+.pill { flex-shrink:0; background:#111827; color:#9CA3AF; border:1px solid #1f2937; padding:10px 16px; border-radius:999px; font-size:14px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+.pill.active { background:#2563EB; color:white; border-color:#3b82f6; box-shadow:0 4px 14px rgba(37,99,235,0.3); }
+
+.card { background:#111827; border-radius:16px; padding:16px; margin-bottom:16px; box-shadow:0 10px 30px rgba(0,0,0,0.35); border:1px solid #1f2937; }
+.card h2 { margin:0 0 12px; font-size:16px; font-weight:800; letter-spacing:0.2px; }
+
+.price-header { display:flex; justify-content:space-between; margin-bottom:10px; }
+.label { font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:#9CA3AF; margin-bottom:4px; font-weight:600; }
+.value { font-size:14px; font-weight:700; }
+
+.live-price { font-size:32px; font-weight:800; letter-spacing:-1px; margin:6px 0 4px; font-variant-numeric:tabular-nums; line-height:1.1; }
+.timestamp { font-size:12px; color:#64748b; margin-bottom:16px; font-variant-numeric:tabular-nums; }
+
+.levels { display:grid; grid-template-columns:1fr; gap:10px; }
+.level { display:flex; justify-content:space-between; align-items:center; background:#0B1220; padding:13px 14px; border-radius:12px; border:1px solid #1f2937; }
+.level span { font-size:12px; color:#9CA3AF; font-weight:600; }
+.level strong { font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.level.tp strong { color:#10B981; }
+.level.sl strong { color:#EF4444; }
+
+.muted { color:#9CA3AF; font-size:13px; line-height:1.45; margin:0 0 14px; }
+
+.calib-input-row { display:flex; gap:8px; margin-bottom:12px; }
+.calib-input-row input { flex:1; background:#0B1220; border:1px solid #374151; border-radius:12px; padding:13px 14px; color:#E5E7EB; font-size:15px; outline:none; font-variant-numeric:tabular-nums; }
+.calib-input-row input:focus { border-color:#2563EB; box-shadow:0 0 0 3px rgba(37,99,235,0.2); }
+.calib-input-row button { background:#10B981; color:#052e21; border:none; border-radius:12px; padding:0 20px; font-weight:800; font-size:14px; box-shadow:0 4px 12px rgba(16,185,129,0.25); }
+.calib-input-row button:active { transform:scale(0.97); }
+.offset-display { font-size:13px; color:#cbd5e1; }
+.offset-display span { color:#10B981; font-weight:800; font-variant-numeric:tabular-nums; }
+
+.val-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.wl-counter { font-size:12px; font-weight:800; padding:6px 10px; background:#0B1220; border-radius:10px; border:1px solid #1f2937; letter-spacing:0.3px; }
+.wl-counter .win { color:#10B981; }
+.wl-counter .loss { color:#EF4444; }
+
+.val-item { background:#0B1220; border:1px solid #1f2937; border-radius:14px; padding:12px; margin-bottom:10px; }
+.val-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; }
+.val-pair { font-size:13px; font-weight:800; color:#e2e8f0; letter-spacing:0.4px; }
+.val-top select { background:#111827; border:1px solid #374151; border-radius:10px; padding:7px 10px; color:#E5E7EB; font-size:13px; font-weight:700; outline:none; min-width:90px; }
+.val-top select:focus { border-color:#2563EB; }
+.val-inputs { display:flex; gap:8px; }
+.val-inputs input { background:#111827; border:1px solid #374151; border-radius:10px; padding:9px 10px; color:#E5E7EB; font-size:13px; outline:none; width:100%; }
+.val-inputs input:focus { border-color:#2563EB; }
+.val-inputs .pips { width:95px; text-align:center; font-variant-numeric:tabular-nums; font-weight:600; }
+
+.btn-save { width:100%; background:#1f2937; color:#E5E7EB; border:1px solid #374151; border-radius:14px; padding:14px; font-weight:800; font-size:15px; margin-top:6px; transition:all 0.15s; }
+.btn-save:active { background:#374151; transform:scale(0.99); }
+
+#toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(120px); background:#1f2937; color:#E5E7EB; padding:13px 20px; border-radius:14px; font-size:14px; font-weight:700; box-shadow:0 12px 30px rgba(0,0,0,0.5); border:1px solid #374151; opacity:0; transition:all 0.35s cubic-bezier(0.2,0.8,0.2,1); z-index:100; pointer-events:none; max-width:90%; text-align:center; }
+#toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+#toast.error { background:#EF4444; border-color:#dc2626; color:white; }
+
+@media (min-width:480px){
+  .levels { grid-template-columns:repeat(3,1fr); }
+  .level { flex-direction:column; align-items:flex-start; gap:5px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <h1>Forex Assist v2.2</h1>
+    <div class="live-status"><span id="statusDot" class="dot"></span> PREÇO AO VIVO</div>
+    <div id="pullIndicator">↓ puxe para atualizar</div>
+  </header>
+  <main>
+    <button id="btnUpdate" class="btn-update">ATUALIZAR</button>
+    <div id="statusMsg" class="status-msg">Toque em ATUALIZAR para conectar</div>
+    
+    <div class="pills" id="pairPills"></div>
+
+    <div class="card">
+      <div class="price-header">
+        <div>
+          <div class="label">Par Ativo</div>
+          <div class="value" id="pairActive">EUR/USD</div>
+        </div>
+        <div style="text-align:right">
+          <div class="label">Fonte</div>
+          <div class="value" id="source">--</div>
+        </div>
+      </div>
+      <div class="live-price" id="livePrice">--.-----</div>
+      <div class="timestamp" id="timestamp">--:--:--</div>
+      <div class="levels">
+        <div class="level"><span>ENTRADA XM</span><strong id="entry">--.-----</strong></div>
+        <div class="level tp"><span>TP +7.5 pips</span><strong id="tp">--.-----</strong></div>
+        <div class="level sl"><span>SL -12.5 pips</span><strong id="sl">--.-----</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Modo Calibração</h2>
+      <p class="muted">Compare com o preço do XM no mesmo instante e insira abaixo para sincronizar automaticamente.</p>
+      <div class="calib-input-row">
+        <input id="xmPrice" type="number" step="0.00001" inputmode="decimal" placeholder="Preço XM agora">
+        <button id="btnCalibrate">Calibrar</button>
+      </div>
+      <div class="offset-display">Offset atual: <span id="offsetDisplay">0.0 pips</span></div>
+    </div>
+
+    <div class="card">
+      <div class="val-header">
+        <h2 style="margin:0">Validação Diária</h2>
+        <div class="wl-counter" id="wlCounter"><span class="win">0W</span> / <span class="loss">0L</span></div>
+      </div>
+      <div id="validationList"></div>
+      <button id="btnSaveVal" class="btn-save">SALVAR VALIDAÇÃO</button>
+    </div>
+  </main>
+  <div id="toast"></div>
+</div>
+
+<script>
+(() => {
+  const PAIRS = [
+    {id:'AUDUSD', label:'AUD/USD', from:'AUD', to:'USD', yahoo:'AUDUSD=X', pip:0.0001},
+    {id:'EURUSD', label:'EUR/USD', from:'EUR', to:'USD', yahoo:'EURUSD=X', pip:0.0001},
+    {id:'GBPUSD', label:'GBP/USD', from:'GBP', to:'USD', yahoo:'GBPUSD=X', pip:0.0001},
+    {id:'USDJPY', label:'USD/JPY', from:'USD', to:'JPY', yahoo:'USDJPY=X', pip:0.01},
+    {id:'USDCAD', label:'USD/CAD', from:'USD', to:'CAD', yahoo:'USDCAD=X', pip:0.0001},
+  ];
+  
+  const $ = id => document.getElementById(id);
+  const state = { active: localStorage.getItem('forex_active') || 'EURUSD', raw: null, connected: false };
+  
+  function getPair(id){ return PAIRS.find(p=>p.id===id); }
+  function formatPrice(v,p){ if(v==null||isNaN(v)) return p.id==='USDJPY'?'--.---':'--.-----'; return p.id==='USDJPY'? v.toFixed(3) : v.toFixed(5); }
+  function getCal(){ try{ return JSON.parse(localStorage.getItem('forex_v22_cal')||'{}'); }catch{ return {}; } }
+  function saveCal(o){ localStorage.setItem('forex_v22_cal', JSON.stringify(o)); }
+  function todayKey(){ return 'forex_v22_val_'+new Date().toISOString().split('T')[0]; }
+  
+  function setStatus(msg){ $('statusMsg').textContent = msg; }
+  function setConnected(on){
+    state.connected = on;
+    const dot = $('statusDot');
+    dot.classList.toggle('live', on);
+    dot.classList.toggle('offline', !on);
+  }
+  function showToast(msg, err){
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = err ? 'show error' : 'show';
+    setTimeout(()=> t.className='', 2800);
+  }
+  
+  function selectPair(id){
+    state.active = id;
+    localStorage.setItem('forex_active', id);
+    document.querySelectorAll('.pill').forEach(b=> b.classList.toggle('active', b.dataset.pair===id));
+    const p = getPair(id);
+    $('pairActive').textContent = p.label;
+    $('xmPrice').value = '';
+    state.raw = null;
+    $('livePrice').textContent = formatPrice(null,p);
+    $('entry').textContent = formatPrice(null,p);
+    $('tp').textContent = formatPrice(null,p);
+    $('sl').textContent = formatPrice(null,p);
+    $('source').textContent = '--';
+    $('timestamp').textContent = '--:--:--';
+    const cal = getCal()[id]||0;
+    $('offsetDisplay').textContent = cal.toFixed(1)+' pips';
+    setStatus('Toque em ATUALIZAR');
+    setConnected(false);
+  }
+  
+  async function updatePrice(){
+    const btn = $('btnUpdate');
+    btn.disabled = true;
+    btn.textContent = 'ATUALIZANDO...';
+    setStatus('Conectando...');
+    const pair = getPair(state.active);
+    
+    try {
+      let price = null, source = '';
+      
+      try {
+        const res = await fetch(`https://api.exchangerate.host/convert?from=${pair.from}&to=${pair.to}`, {cache:'no-store'});
+        if(res.ok){
+          const data = await res.json();
+          if(data && typeof data.result === 'number'){ price = data.result; source = 'ECB'; }
+        }
+      } catch(e){}
+      
+      if(!price){
+        try {
+          const res2 = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${pair.yahoo}?interval=1m`, {cache:'no-store'});
+          if(res2.ok){
+            const d = await res2.json();
+            const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+            if(typeof p === 'number'){ price = p; source = 'Yahoo'; }
+          }
+        } catch(e){}
+      }
+      
+      if(!price) throw new Error('offline');
+      
+      state.raw = price;
+      const cal = getCal()[pair.id]||0;
+      const calibrated = price + cal * pair.pip;
+      
+      $('livePrice').textContent = formatPrice(calibrated, pair);
+      $('source').textContent = source;
+      $('timestamp').textContent = new Date().toLocaleTimeString('pt-BR');
+      const entry = calibrated + (pair.id==='USDJPY'?0.02:0.0002);
+      $('entry').textContent = formatPrice(entry, pair);
+      $('tp').textContent = formatPrice(entry + 7.5*pair.pip, pair);
+      $('sl').textContent = formatPrice(entry - 12.5*pair.pip, pair);
+      
+      setConnected(true);
+      setStatus('Conectado • '+source);
+      showToast('Preço atualizado');
+    } catch(err){
+      setConnected(false);
+      setStatus('Offline — toque para tentar novamente');
+      showToast('Sem conexão', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'ATUALIZAR';
+    }
+  }
+  
+  function calibrate(){
+    const xm = parseFloat($('xmPrice').value.replace(',','.'));
+    const pair = getPair(state.active);
+    if(!xm || !state.raw){
+      showToast('Atualize o preço primeiro', true);
+      return;
+    }
+    const offsetPips = (xm - state.raw) / pair.pip;
+    const cal = getCal();
+    cal[pair.id] = offsetPips;
+    saveCal(cal);
+    $('offsetDisplay').textContent = offsetPips.toFixed(1)+' pips';
+    showToast('Calibrado: '+offsetPips.toFixed(1)+' pips');
+    
+    const calibrated = state.raw + offsetPips * pair.pip;
+    $('livePrice').textContent = formatPrice(calibrated, pair);
+    const entry = calibrated + (pair.id==='USDJPY'?0.02:0.0002);
+    $('entry').textContent = formatPrice(entry, pair);
+    $('tp').textContent = formatPrice(entry + 7.5*pair.pip, pair);
+    $('sl').textContent = formatPrice(entry - 12.5*pair.pip, pair);
+  }
+  
+  function loadValidation(){
+    const data = JSON.parse(localStorage.getItem(todayKey())||'{}');
+    let w=0,l=0;
+    PAIRS.forEach(p=>{
+      const item = document.querySelector(`.val-item[data-val="${p.id}"]`);
+      const v = data[p.id]||{};
+      item.querySelector('select').value = v.result||'--';
+      item.querySelector('.pips').value = v.pips||'';
+      item.querySelector('.obs').value = v.obs||'';
+      if(v.result==='WIN') w++;
+      if(v.result==='LOSS') l++;
+    });
+    $('wlCounter').innerHTML = `<span class="win">${w}W</span> / <span class="loss">${l}L</span>`;
+  }
+  
+  function saveValidation(){
+    const data = {};
+    let w=0,l=0;
+    PAIRS.forEach(p=>{
+      const item = document.querySelector(`.val-item[data-val="${p.id}"]`);
+      const result = item.querySelector('select').value;
+      const pips = item.querySelector('.pips').value;
+      const obs = item.querySelector('.obs').value;
+      data[p.id] = {result,pips,obs};
+      if(result==='WIN') w++;
+      if(result==='LOSS') l++;
+    });
+    localStorage.setItem(todayKey(), JSON.stringify(data));
+    $('wlCounter').innerHTML = `<span class="win">${w}W</span> / <span class="loss">${l}L</span>`;
+    showToast('Validação salva');
+  }
+  
+  function init(){
+    const pills = $('pairPills');
+    PAIRS.forEach(p=>{
+      const b = document.createElement('button');
+      b.className='pill';
+      b.dataset.pair=p.id;
+      b.textContent=p.label;
+      b.onclick=()=>selectPair(p.id);
+      pills.appendChild(b);
+    });
+    
+    const list = $('validationList');
+    PAIRS.forEach(p=>{
+      const item = document.createElement('div');
+      item.className='val-item';
+      item.dataset.val=p.id;
+      item.innerHTML = `
+        <div class="val-top">
+          <div class="val-pair">${p.id}</div>
+          <select>
+            <option value="--">--</option>
+            <option value="WIN">WIN</option>
+            <option value="LOSS">LOSS</option>
+          </select>
+        </div>
+        <div class="val-inputs">
+          <input type="number" step="0.1" class="pips" placeholder="pips" inputmode="decimal">
+          <input type="text" class="obs" placeholder="observação">
+        </div>`;
+      list.appendChild(item);
+    });
+    
+    $('btnUpdate').onclick = updatePrice;
+    $('btnCalibrate').onclick = calibrate;
+    $('btnSaveVal').onclick = saveValidation;
+    
+    selectPair(state.active);
+    loadValidation();
+    setConnected(false);
+    
+    // Pull to refresh
+    let startY = 0, pulling = false;
+    const pullEl = $('pullIndicator');
+    document.addEventListener('touchstart', e=>{ if(window.scrollY===0) startY = e.touches[0].clientY; }, {passive:true});
+    document.addEventListener('touchmove', e=>{
+      if(!startY) return;
+      const dy = e.touches[0].clientY - startY;
+      if(window.scrollY===0 && dy>60){ pulling = true; pullEl.style.opacity='1'; }
+    }, {passive:true});
+    document.addEventListener('touchend', ()=>{
+      if(pulling){ pulling=false; pullEl.style.opacity='0'; updatePrice(); }
+      startY=0;
+    });
+  }
+  
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+                                </html>

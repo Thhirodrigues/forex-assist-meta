@@ -1,9 +1,221 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Forex Assist OFFLINE v3.0</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--bg:#0B1220;--card:#111827;--text:#E5E7EB;--muted:#9CA3AF;--green:#10B981;--red:#EF4444;--blue:#3B82F6}
 *{box-sizing:border-box;font-family:system-ui,Arial}
@@ -24,12 +236,14 @@ button{width:100%;padding:16px;background:var(--blue);border:0;border-radius:12p
 <body>
 <h1>Forex Assist v3.0</h1>
 <small>OFFLINE • 100% instantâneo • XM</small>
+
 <div class="card">
 <div class="pills" id="pairs"></div>
 <label class="label">Preço ATUAL na XM</label>
 <input id="px" type="number" step="0.00001" placeholder="ex: 0.64850" inputmode="decimal">
 <button onclick="calc()">CALCULAR AGORA</button>
 </div>
+
 <div class="card">
 <div class="grid">
 <div><div class="label">PAR</div><div class="val" id="par">AUD/USD</div></div>
@@ -40,14 +254,31 @@ button{width:100%;padding:16px;background:var(--blue);border:0;border-radius:12p
 <div><div class="label">SL -12.5</div><div class="val" id="sl" style="color:var(--red)">--</div></div>
 </div>
 </div>
+
 <script>
-const PAIRS=['AUD/USD','EUR/USD','GBP/USD','USD/JPY','USD/CAD'];
+const PAIRS=['AUD/USD','EUR/USD','GBP/USD','USD/JPY','USDCAD'];
 let idx=0;
 const pip=s=>s.includes('JPY')?0.01:0.0001;
 const fmt=(v,s)=>s.includes('JPY')?v.toFixed(3):v.toFixed(5);
-function build(){const c=document.getElementById('pairs');c.innerHTML='';PAIRS.forEach((p,i)=>{const d=document.createElement('div');d.className='pill'+(i===idx?' active':'');d.textContent=p;d.onclick=()=>{idx=i;document.getElementById('par').textContent=p;calc();};c.appendChild(d);});}
-function calc(){const p=document.getElementById('px').value.replace(',','.');const price=parseFloat(p);if(!price){alert('Digite o preço da XM');return;}const pair=PAIRS[idx];const pp=pip(pair);const ent=price+2*pp;document.getElementById('ent').textContent=fmt(ent,pair);document.getElementById('tp').textContent=fmt(ent+7.5*pp,pair);document.getElementById('sl').textContent=fmt(ent-12.5*pp,pair);document.getElementById('hr').textContent=new Date().toLocaleTimeString('pt-BR').slice(0,5);document.getElementById('par').textContent=pair;}
-build();document.getElementById('px').addEventListener('keydown',e=>{if(e.key==='Enter')calc();});
+function build(){
+ const c=document.getElementById('pairs');c.innerHTML='';
+ PAIRS.forEach((p,i)=>{const d=document.createElement('div');d.className='pill'+(i===idx?' active':'');d.textContent=p;d.onclick=()=>{idx=i;document.getElementById('par').textContent=p;calc();};c.appendChild(d);});
+}
+function calc(){
+ const p=document.getElementById('px').value.replace(',','.');
+ const price=parseFloat(p);
+ if(!price){alert('Digite o preço da XM');return;}
+ const pair=PAIRS[idx];
+ const pp=pip(pair);
+ const ent=price+2*pp;
+ document.getElementById('ent').textContent=fmt(ent,pair);
+ document.getElementById('tp').textContent=fmt(ent+7.5*pp,pair);
+ document.getElementById('sl').textContent=fmt(ent-12.5*pp,pair);
+ document.getElementById('hr').textContent=new Date().toLocaleTimeString('pt-BR').slice(0,5);
+ document.getElementById('par').textContent=pair;
+}
+build();
+document.getElementById('px').addEventListener('keydown',e=>{if(e.key==='Enter')calc();});
 </script>
 </body>
 </html>

@@ -1,1 +1,269 @@
-<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forex Assist v3.2.1 Teste</title><style>:root{--bg:#0B1220;--card:#121C2F;--card2:#17243A;--border:#1F2A44;--text:#E6EDF7;--muted:#8B9BB4;--green:#10B981;--red:#EF4444;--amber:#F59E0B;--blue:#3B82F6}*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:#0B1220;color:var(--text);font-family:Inter,system-ui} .app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}header{position:sticky;top:0;z-index:20;padding:18px 16px;background:rgba(11,18,32,.7);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);text-align:center;font-weight:800}main{flex:1;padding:16px 16px 100px}.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:22px;padding:16px;margin-bottom:14px}</style></head><body><div class="app"><header>FOREX ASSIST <span style="color:#3B82F6">v3.2.1</span></header><main id="root"></main></div><script src="teste321.js"></script></body></html>
+<!DOCTYPE html><html lang="pt-BR"><head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forex Assist v3.2.1</title>
+<style>:root{--bg:#0B1220;--c:#121C2F;--b:#1F2A44;--t:#E6EDF7;--m:#8B9BB4}body{margin:0;background:var(--bg);color:var(--t);font-family:system-ui;padding:0}header{padding:18px;text-align:center;font-weight:800;border-bottom:1px solid var(--b);position:sticky;top:0;background:rgba(11,18,32,.8);backdrop-filter:blur(8px)}main{max-width:480px;margin:0 auto;padding:16px}.card{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:14px;margin:12px 0}button{background:#3B82F6;color:#fff;border:0;padding:12px 16px;border-radius:10px;font-weight:700;margin-right:8px}button.green{background:#10B981}button.red{background:#EF4444}.ok{color:#10B981}.muted{color:var(--m);font-size:13px}#log{max-height:200px;overflow:auto;font-family:monospace;font-size:12px}</style>
+</head><body>
+<header>FOREX ASSIST <span style="color:#3B82F6">v3.2.1</span></header>
+<main>
+<div class="card"><div id="push">Push: DESATIVADO</div><div class="muted">Horário: 8:30-10:30 e 14:30-16:30</div><div style="margin-top:10px"><button id="perm">ATIVAR NOTIFICAÇÕES</button><button id="test" class="green">TESTAR</button><button id="run">ESCANEAR</button></div></div>
+<div class="card"><b>Como usar agora:</b><div class="muted">1. Clique ATIVAR (você já fez) 2. Clique TESTAR para sentir a vibração 3. No horário, clique ESCANEAR e deixe aberto. Quando achar BUY/SELL, vibra e notifica.</div></div>
+<div class="card"><b>Log</b><div id="log"></div></div>
+</main>
+<script>
+const API_KEY='R2G4BTFYRDDUB4DK';
+const SYMBOLS=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','USD/CHF'];
+const state={running:false,last:{}};
+const $=s=>document.querySelector(s);
+const fmt=n=>Number(n).toFixed(5);
+function log(m){$('#log').innerHTML=`<div>${new Date().toLocaleTimeString()} - ${m}</div>`+$('#log').innerHTML}
+async function fetchData(sym){
+  const fx=sym.replace('/','');
+  const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${sym.split('/')[0]}&to_symbol=${sym.split('/')[1]}&interval=1min&outputsize=compact&apikey=${API_KEY}`;
+  const r=await fetch(url); const j=await r.json(); const series=j[Object.keys(j).find(k=>k.includes('Time Series'))]; if(!series) throw 'sem dados';
+  const times=Object.keys(series).sort().reverse(); const c=times.slice(0,60).map(t=>parseFloat(series[t]['4. close'])).reverse();
+  return {price:c[c.length-1],c};
+}
+function ema(arr,p){const k=2/(p+1);let e=arr[0];const out=[e];for(let i=1;i<arr.length;i++){e=arr[i]*k+e*(1-k);out.push(e)}return out}
+function rsi(arr,14){let g=0,l=0;for(let i=1;i<=14;i++){const d=arr[i]-arr[i-1];if(d>0)g+=d;else l-=d}let ag=g/14,al=l/14;const out=[];for(let i=15;i<arr.length;i++){const d=arr[i]-arr[i-1];ag=(ag*13+(d>0?d:0))/14;al=(al*13+(d<0?-d:0))/14;out.push(100-100/(1+ag/(al||1e-9)))}return out}
+function inWindow(){const h=new Date().getHours(),m=new Date().getMinutes(),t=h*60+m;return(t>=510&&t<=630)||(t>=870&&t<=990)}
+function notify(sym,dir,price){
+  if(Notification.permission==='granted'){
+    navigator.vibrate&&navigator.vibrate([1000,500,1000,500,1000]);
+    new Notification(`${sym} ${dir}`,{body:`Entrada ${fmt(price)} | TP ${fmt(dir==='BUY'?price+0.0005:price-0.0005)}`,tag:'forex'});
+  }
+}
+async function scan(){
+  if(!inWindow()){log('Fora do horário');return}
+  for(const s of SYMBOLS){
+    try{
+      const {price,c}=await fetchData(s); if(c.length<50) continue;
+      const e9=ema(c,9),e21=ema(c,21),r=rsi(c,14); const last=c.length-1;
+      const up=e9[last]>e21[last]&&c[last]>e9[last]&&r[r.length-1]>50&&r[r.length-1]<70;
+      const dn=e9[last]<e21[last]&&c[last]<e9[last]&&r[r.length-1]<50&&r[r.length-1]>30;
+      const dir=up?'BUY':dn?'SELL':null;
+      if(dir && state.last[s]!==dir){state.last[s]=dir; notify(s,dir,price); log(`${s} ${dir} @ ${fmt(price)}`);}
+    }catch(e){log(s+' erro')}
+    await new Promise(r=>setTimeout(r,12000));
+  }
+}
+function toggle(){
+  state.running=!state.running; $('#run').textContent=state.running?'PARAR':'ESCANEAR';
+  if(state.running){scan(); state.iv=setInterval(scan,60000)} else clearInterval(state.iv);
+}
+window.onload=()=>{
+  $('#run').onclick=toggle;
+  $('#test').onclick=()=>notify('EUR/USD','BUY',1.12345);
+  $('#perm').onclick=async()=>{const p=await Notification.requestPermission();$('#push').textContent='Push: '+p.toUpperCase();$('#push').className=p==='granted'?'ok':''};
+  if(Notification.permission==='granted'){$('#push').textContent='Push: ATIVO';$('#push').className='ok'}
+}
+</script>
+</body></html>

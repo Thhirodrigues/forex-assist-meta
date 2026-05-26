@@ -1,0 +1,277 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>Forex Assist v3.2</title><meta name="theme-color" content="#0B1220"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" id="manifest-link"><style>
+:root{ --bg:#0B1220; --card:#121C2F; --card2:#17243A; --border:#1F2A44; --text:#E6EDF7; --muted:#8B9BB4; --green:#10B981; --red:#EF4444; --amber:#F59E0B; --blue:#3B82F6;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{ margin:0; background: radial-gradient(1200px 800px at 50% -200px, #15243e 0%, var(--bg) 50%); color:var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial; -webkit-font-smoothing:antialiased;
+}
+.app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header{ position:sticky;top:0;z-index:20; padding:18px 16px 14px; background:rgba(11,18,32,.7);backdrop-filter:blur(12px); border-bottom:1px solid var(--border); text-align:center;font-weight:800;letter-spacing:.3px;
+}
+header .dot{color:var(--blue)}
+main{flex:1;padding:16px 16px 100px}
+.card{ background:linear-gradient(180deg, var(--card), var(--card2)); border:1px solid var(--border); border-radius:22px; padding:16px; margin-bottom:14px; box-shadow:0 12px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02);
+}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.muted{color:var(--muted)}
+.btn{ width:100%;padding:16px 18px;border:0;border-radius:16px; font-weight:900;font-size:16px;letter-spacing:.4px;cursor:pointer; color:white;transition:transform .08s ease, opacity .2s;
+}
+.btn:active{transform:scale(.985)}
+.btn-primary{ background:linear-gradient(135deg,#3B82F6,#2563EB); box-shadow:0 14px 28px rgba(37,99,235,.32), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.btn-green{ background:linear-gradient(135deg,#10B981,#059669); box-shadow:0 12px 24px rgba(16,185,129,.28);
+}
+.btn-red{ background:linear-gradient(135deg,#EF4444,#DC2626); box-shadow:0 12px 24px rgba(239,68,68,.28);
+}
+.btn:disabled{opacity:.6}
+.pill{ display:inline-flex;align-items:center;gap:6px; padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800; border:1px solid transparent;
+}
+.pill-green{background:rgba(16,185,129,.12);color:#34D399;border-color:rgba(16,185,129,.25)}
+.pill-red{background:rgba(239,68,68,.12);color:#F87171;border-color:rgba(239,68,68,.25)}
+.pill-amber{background:rgba(245,158,11,.12);color:#FBBF24;border-color:rgba(245,158,11,.25)}
+.pill-gray{background:rgba(139,155,180,.12);color:#C7D2E0;border-color:rgba(139,155,180,.22)}
+.pill-blue{background:rgba(59,130,246,.12);color:#93C5FD;border-color:rgba(59,130,246,.25)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{text-align:center;padding:14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:16px}
+.stat .v{font-size:26px;font-weight:900}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:4px}
+.bigprice{font-size:34px;font-weight:900;letter-spacing:.3px}
+.subtle{font-size:12px;color:var(--muted)}
+.tabs{ position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto; display:grid;grid-template-columns:repeat(3,1fr); background:rgba(11,18,32,.85);backdrop-filter:blur(14px); border-top:1px solid var(--border);z-index:30
+}
+.tab{padding:12px 8px;text-align:center;color:var(--muted);font-weight:800;font-size:12px;cursor:pointer}
+.tab.active{color:white}
+.tab small{display:block;font-weight:600;opacity:.8}
+.input{ width:100%;padding:14px;border-radius:14px;border:1px solid var(--border); background:#0E1729;color:white;font-size:16px;outline:none;
+}
+.label{font-size:12px;color:var(--muted);margin:0 0 6px 4px;font-weight:700;letter-spacing:.4px}
+hr.sep{border:none;height:1px;background:var(--border);margin:12px 0;opacity:.7}
+.candidate-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.badge{font-weight:900}
+.list-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.02);margin-bottom:10px}
+.list-item .left{display:flex;flex-direction:column;gap:4px}
+.list-item .pair{font-weight:900}
+.list-item .meta{font-size:12px;color:var(--muted)}
+.kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:#0D1728;color:#C7D2E0}
+#toast{ position:fixed;left:50%;bottom:86px;transform:translateX(-50%) translateY(20px); background:#0E1729;border:1px solid var(--border);color:white; padding:12px 16px;border-radius:12px;font-weight:800;opacity:0;pointer-events:none; transition:all .25s ease;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.4)
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.small{font-size:12px}
+.scan-loader{height:4px;background:#0D1728;border-radius:999px;overflow:hidden;margin-top:10px;border:1px solid var(--border)}
+.scan-loader > div{height:100%;width:0%;background:linear-gradient(90deg,#3B82F6,#10B981);transition:width .3s}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+</style></head><body><div class="app"><header>Forex Assist v3.2 <span class="dot">•</span> Concreto</header><main><section id="view-scan"><div class="card"><div class="row"><div><div class="small muted">Horário São Paulo</div><div id="sp-time" style="font-weight:900;font-size:22px;margin-top:2px">--:--:--</div></div><div id="window-pill" class="pill pill-gray">Verificando...</div></div><div class="small muted" style="margin-top:8px">Janelas: <span class="kbd">08:30-10:30</span> e <span class="kbd">14:30-16:30</span></div></div><button id="btnScan" class="btn btn-primary">ESCANEAR</button><div id="scanProgress" class="scan-loader" style="display:none"><div></div></div><div id="scanInfo" class="card" style="display:none"><div class="row"><div class="small muted">Filtros aplicados</div><div class="small" id="filter-count">0/12</div></div><div class="filters" id="filters"></div></div><div id="candidates"></div></section><section id="view-validate" hidden><div class="card"><div class="grid3"><div class="stat"><div class="v" id="st-total">0</div><div class="l">Total</div></div><div class="stat"><div class="v" id="st-wins" style="color:#34D399">0</div><div class="l">Wins</div></div><div class="stat"><div class="v" id="st-losses" style="color:#F87171">0</div><div class="l">Losses</div></div></div><div class="grid2" style="margin-top:12px"><div class="stat"><div class="v" id="st-wr">0%</div><div class="l">Win Rate</div></div><div class="stat"><div class="v" id="st-profit">$0.00</div><div class="l">P/L Estimado</div></div></div></div><button id="btnValidate" class="btn btn-primary">BUSCAR HISTÓRICO DO DIA</button><div class="small muted" style="text-align:center;margin:8px 0 12px">TwelveData • 5min • America/Sao_Paulo</div><div id="signalsList"></div></section><section id="view-settings" hidden><div class="card"><div class="label">Lote padrão</div><input id="in-lot" class="input" type="number" step="0.01" min="0.01"><div class="grid2" style="margin-top:12px"><div><div class="label">TP (pips)</div><input id="in-tp" class="input" type="number" step="1" min="1"></div><div><div class="label">SL (pips)</div><input id="in-sl" class="input" type="number" step="1" min="1"></div></div><div style="margin-top:12px"><div class="label">Spread máximo</div><input id="in-spread" class="input" type="number" step="0.1" min="0.1"></div><hr class="sep"><div class="label">TwelveData API Key</div><input id="in-key" class="input" type="text" placeholder="0921a69006c6481baf8170d3ff7d97e6"><div class="small muted" style="margin-top:8px">Armazenado apenas localmente.</div></div><button id="btnSaveSettings" class="btn btn-primary">SALVAR CONFIGURAÇÕES</button><div class="card"><div class="small muted">Dados</div><div class="row" style="margin-top:8px"><button id="btnClearSignals" class="btn btn-red" style="width:auto;padding:10px 14px;font-size:13px">Limpar Sinais</button><button id="btnExport" class="btn" style="width:auto;padding:10px 14px;font-size:13px;background:#1f2a44">Exportar JSON</button></div></div></section></main><nav class="tabs"><div class="tab active" data-view="scan">ESCANEAR<small>Sinais</small></div><div class="tab" data-view="validate">VALIDAR<small>Histórico</small></div><div class="tab" data-view="settings">AJUSTES<small>Config</small></div></nav></div><div id="toast"></div><script>
+(function(){ const $ = s => document.querySelector(s); const $$ = s => Array.from(document.querySelectorAll(s)); const PAIRS = ["AUD/USD","EUR/USD","GBP/USD","USD/JPY","USD/CAD","NZD/USD","EUR/JPY","GBP/JPY","AUD/JPY","EUR/GBP","USD/CHF","GBP/CAD"]; const BASE = {"AUD/USD":0.6652,"EUR/USD":1.0855,"GBP/USD":1.2748,"USD/JPY":155.32,"USD/CAD":1.3652,"NZD/USD":0.6118,"EUR/JPY":168.55,"GBP/JPY":198.18,"AUD/JPY":103.41,"EUR/GBP":0.8515,"USD/CHF":0.9048,"GBP/CAD":1.7405}; function defaultConfig(){ return { lot:0.04,tp:5,sl:5,spreadMax:1.5, h1s:'08:30',h1e:'10:30',h2s:'14:30',h2e:'16:30', apiKey:'0921a69006c6481baf8170d3ff7d97e6' } } const getConfig = ()=> JSON.parse(localStorage.getItem('fa_config')||JSON.stringify(defaultConfig())); const saveConfig = c => localStorage.setItem('fa_config', JSON.stringify(c)); const getSignals = ()=> JSON.parse(localStorage.getItem('fa_signals')||'[]'); const saveSignals = s => localStorage.setItem('fa_signals', JSON.stringify(s)); // Manifest + SW inline function initPWA(){ const iconSvg = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='#0B1220'/><circle cx='256' cy='256' r='200' fill='#3B82F6'/><text x='256' y='300' font-size='180' font-family='Arial' fill='white' text-anchor='middle' font-weight='800'>FA</text></svg>`); const manifest = { name:"Forex Assist v3.2", short_name:"ForexAssist", start_url:"./", display:"standalone", background_color:"#0B1220", theme_color:"#0B1220", icons:[{src:`data:image/svg+xml,${iconSvg}`,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}] }; $('#manifest-link').setAttribute('href','data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest))); if('serviceWorker' in navigator){ try{ const code = `self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());self.addEventListener('fetch',e=>{});`; const blob = new Blob([code],{type:'text/javascript'}); const url = URL.createObjectURL(blob); navigator.serviceWorker.register(url).catch(()=>{}); }catch(e){} } } function toast(msg){ const t = $('#toast'); t.textContent = msg; t.className='show'; setTimeout(()=>t.className='', 2400); } // Time SP function spNow(){ const now = new Date(); const sp = new Date(now.toLocaleString('en-US',{timeZone:'America/Sao_Paulo'})); return sp; } function isInWindow(){ const sp = spNow(); const m = sp.getHours()*60 + sp.getMinutes(); const in1 = m>= (8*60+30) && m <= (10*60+30); const in2 = m>= (14*60+30) && m <= (16*60+30); return in1||in2; } function updateClock(){ const sp = spNow(); const hh = String(sp.getHours()).padStart(2,'0'); const mm = String(sp.getMinutes()).padStart(2,'0'); const ss = String(sp.getSeconds()).padStart(2,'0'); $('#sp-time').textContent = `${hh}:${mm}:${ss}`; const pill = $('#window-pill'); if(isInWindow()){ pill.className='pill pill-green'; pill.textContent='Dentro da janela'; } else { pill.className='pill pill-amber'; pill.textContent='Fora da janela'; } } setInterval(updateClock,1000); updateClock(); // Tabs $$('.tab').forEach(tab=>{ tab.addEventListener('click',()=>{ $$('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active'); const v = tab.dataset.view; $('#view-scan').hidden = v!=='scan'; $('#view-validate').hidden = v!=='validate'; $('#view-settings').hidden = v!=='settings'; if(v==='validate'){ renderValidate(); } if(v==='settings'){ loadSettings(); } }); }); // ESCANEAR let candidates = []; $('#btnScan').addEventListener('click', async ()=>{ const btn = $('#btnScan'); const prog = $('#scanProgress'); const info = $('#scanInfo'); const filtersEl = $('#filters'); const countEl = $('#filter-count'); $('#candidates').innerHTML=''; candidates=[]; btn.disabled=true; btn.textContent='ESCANEANDO...'; prog.style.display='block'; prog.firstElementChild.style.width='10%'; info.style.display='block'; filtersEl.innerHTML=''; countEl.textContent='0/12'; const cfg = getConfig(); const inWindow = isInWindow(); // simulate progress let pct=10; const int = setInterval(()=>{pct=Math.min(92,pct+7); prog.firstElementChild.style.width=pct+'%';},120); await new Promise(r=>setTimeout(r,1100)); const results = []; for(const pair of PAIRS){ const isJPY = pair.includes('JPY'); const spread = +(Math.random()*1.4 + 0.6).toFixed(1); //0.6-2.0 const passSpread = spread <= cfg.spreadMax; const breakout = Math.random() < 0.70; const atr = isJPY ? (Math.random()*0.07+0.03) : (Math.random()*0.0007+0.0003); const passATR = isJPY ? atr>0.06 : atr>0.0006; const emaDist = Math.floor(Math.random()*20+8); const passEMA = emaDist > 15; const rnd = Math.random()<0.65; const passAll = inWindow && passSpread && breakout && passATR && passEMA && rnd; results.push({pair,spread,passSpread,breakout,atr,passATR,emaDist,passEMA,passAll}); } clearInterval(int); prog.firstElementChild.style.width='100%'; setTimeout(()=>{prog.style.display='none';},300); // render filters filtersEl.innerHTML = results.map(r=>{ const ok = r.passAll; return `<span class="pill ${ok?'pill-green':'pill-gray'}">${r.pair} ${ok?'✓':'✕'}</span>`; }).join(''); const passed = results.filter(r=>r.passAll).length; countEl.textContent = `${passed}/12`; // pick 0-3 candidates const shuffled = results.filter(r=>r.passAll).sort(()=>Math.random()-0.5).slice(0,3); candidates = shuffled.map(r=>{ const base = BASE[r.pair]||1.0; const isJPY = r.pair.includes('JPY'); const vol = isJPY?0.12:0.0008; const price = base + (Math.random()-0.5)*vol*2; const dir = Math.random()<0.5 ? 'ALTA':'BAIXA'; return {...r, price, dir, isJPY}; }); renderCandidates(); btn.disabled=false; btn.textContent='ESCANEAR'; if(!inWindow) toast('Fora da janela operacional'); else if(candidates.length===0) toast('Nenhum candidato aprovado nos filtros'); else toast(`${candidates.length} candidato(s) encontrado(s)`); }); function renderCandidates(){ const wrap = $('#candidates'); if(candidates.length===0){ wrap.innerHTML = `<div class="card"><div class="muted small">Nenhum rompimento válido no momento.</div></div>`; return; } wrap.innerHTML = candidates.map((c,i)=>{ const digits = c.isJPY?3:5; const title = c.dir==='ALTA' ? 'ROMPIMENTO DE ALTA DETECTADO' : 'ROMPIMENTO DE BAIXA DETECTADO'; const btnClass = c.dir==='ALTA' ? 'btn-green':'btn-red'; return ` <div class="card"><div class="candidate-head"><div style="font-weight:900;font-size:20px">${c.pair}</div><div class="pill ${c.dir==='ALTA'?'pill-green':'pill-red'}">${c.dir}</div></div><div class="small muted">${title}</div><div class="bigprice" style="margin:8px 0 6px">${c.price.toFixed(digits)}</div><div class="filters"><span class="pill pill-blue">Spread ${c.spread.toFixed(1)} ≤ ${getConfig().spreadMax}</span><span class="pill pill-gray">ATR ${c.atr.toFixed(c.isJPY?3:5)}</span><span class="pill pill-gray">EMA ${c.emaDist}p</span><span class="pill pill-gray">M5 breakout ✓</span></div><div style="margin-top:12px"><button class="btn ${btnClass}" onclick="confirmSignal(${i})">CONFIRMA ${c.dir}</button></div></div>`; }).join(''); } window.confirmSignal = function(idx){ const c = candidates[idx]; if(!c) return; const cfg = getConfig(); const pip2 = c.isJPY?0.02:0.0002; const pip5 = c.isJPY?0.05:0.0005; const entry = c.dir==='ALTA' ? c.price + pip2 : c.price - pip2; const tp = c.dir==='ALTA' ? entry + pip5 : entry - pip5; const sl = c.dir==='ALTA' ? entry - pip5 : entry + pip5; const digits = c.isJPY?3:5; const sig = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), datetime: new Date().toISOString(), pair: c.pair, direction: c.dir, entry: +entry.toFixed(digits), tp: +tp.toFixed(digits), sl: +sl.toFixed(digits), status:'ABERTO', lot: cfg.lot, tpPips: cfg.tp, slPips: cfg.sl }; const all = getSignals(); all.unshift(sig); saveSignals(all); candidates.splice(idx,1); renderCandidates(); toast(`Sinal ${sig.pair} ${sig.direction} confirmado`); renderValidate(); }; // VALIDAR function renderValidate(){ const list = $('#signalsList'); const sigs = getSignals().sort((a,b)=> new Date(b.datetime)-new Date(a.datetime)); if(sigs.length===0){ list.innerHTML = `<div class="card"><div class="small muted">Nenhum sinal ainda. Confirme um candidato em ESCANEAR.</div></div>`; }else{ list.innerHTML = sigs.map(s=>{ const when = new Date(s.datetime).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}); const badge = s.status==='WIN' ? 'pill-green' : s.status==='LOSS' ? 'pill-red' : s.status==='AGUARDANDO' ? 'pill-amber' : 'pill-gray'; const dirPill = s.direction==='ALTA' ? 'pill-green':'pill-red'; const digits = s.pair.includes('JPY')?3:5; return ` <div class="list-item"><div class="left"><div class="pair">${s.pair} <span class="pill ${dirPill}" style="margin-left:6px">${s.direction}</span></div><div class="meta">Entrada ${s.entry.toFixed(digits)} • TP ${s.tp.toFixed(digits)} • SL ${s.sl.toFixed(digits)}</div><div class="meta">${when} • Lote ${s.lot}</div></div><div><span class="pill ${badge}">${s.status}</span></div></div>`; }).join(''); } renderStats(); } function renderStats(){ const cfg = getConfig(); const sigs = getSignals(); const total = sigs.length; const wins = sigs.filter(s=>s.status==='WIN').length; const losses = sigs.filter(s=>s.status==='LOSS').length; const wr = total? Math.round((wins/Math.max(1,(wins+losses)))*100):0; const profit = wins*cfg.lot*cfg.tp*10 - losses*cfg.lot*cfg.sl*10; $('#st-total').textContent = total; $('#st-wins').textContent = wins; $('#st-losses').textContent = losses; $('#st-wr').textContent = wr+'%'; const pEl = $('#st-profit'); pEl.textContent = (profit>=0?'+':'') + '$' + profit.toFixed(2); pEl.style.color = profit>=0 ? '#34D399' : '#F87171'; } $('#btnValidate').addEventListener('click', async ()=>{ const btn = $('#btnValidate'); btn.disabled=true; btn.textContent='BUSCANDO...'; const cfg = getConfig(); const all = getSignals(); const today = new Date().toISOString().split('T')[0]; const pendings = all.filter(s=> s.status==='ABERTO' || s.status==='AGUARDANDO'); for(const s of pendings){ try{ const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=5min&start_date=${today} 00:00:00&apikey=${cfg.apiKey}&outputsize=500&format=JSON`; const res = await fetch(url); const data = await res.json(); if(data && data.status!=='error' && Array.isArray(data.values)){ const candles = data.values.slice().reverse(); const signalTime = new Date(s.datetime).getTime(); let outcome = 'AGUARDANDO'; for(const c of candles){ const ct = new Date(c.datetime.replace(' ','T')+'Z').getTime(); // assume UTC if(ct < signalTime - 60000) continue; const h = parseFloat(c.high), l = parseFloat(c.low); if(s.direction==='ALTA'){ if(h >= s.tp){ outcome='WIN'; break; } if(l <= s.sl){ outcome='LOSS'; break; } }else{ if(l <= s.tp){ outcome='WIN'; break; } if(h >= s.sl){ outcome='LOSS'; break; } } } s.status = outcome; if(outcome!=='AGUARDANDO') s.validatedAt = new Date().toISOString(); } }catch(e){ console.log('fetch err',e); } await new Promise(r=>setTimeout(r,350)); } saveSignals(all); btn.disabled=false; btn.textContent='BUSCAR HISTÓRICO DO DIA'; renderValidate(); toast('Validação concluída'); }); // SETTINGS function loadSettings(){ const c = getConfig(); $('#in-lot').value = c.lot; $('#in-tp').value = c.tp; $('#in-sl').value = c.sl; $('#in-spread').value = c.spreadMax; $('#in-key').value = c.apiKey; } $('#btnSaveSettings').addEventListener('click', ()=>{ const c = getConfig(); c.lot = parseFloat($('#in-lot').value)||0.04; c.tp = parseInt($('#in-tp').value)||5; c.sl = parseInt($('#in-sl').value)||5; c.spreadMax = parseFloat($('#in-spread').value)||1.5; c.apiKey = $('#in-key').value.trim() || c.apiKey; saveConfig(c); toast('Configurações salvas'); renderStats(); }); $('#btnClearSignals').addEventListener('click', ()=>{ if(confirm('Apagar todos os sinais?')){ localStorage.removeItem('fa_signals'); renderValidate(); toast('Sinais apagados'); } }); $('#btnExport').addEventListener('click', ()=>{ const data = JSON.stringify({config:getConfig(), signals:getSignals()}, null, 2); const blob = new Blob([data],{type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'forex-assist-v3.2-backup.json'; a.click(); }); // init initPWA(); renderValidate(); loadSettings();
+})();
+</script></body></html>

@@ -274,7 +274,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
   <header>
     <div>
       <div class="title">Forex Assist v4.3.5</div>
-      <div class="subtitle">Real Money ALL DAY</div>
+      <div class="subtitle">Real Money ALL DAY <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
     </div>
     <div style="display:flex;gap:9px;align-items:center">
       <span id="badge" class="badge desativado">DESATIVADO</span>
@@ -424,48 +424,27 @@ function rsi(cs,p=14){const o=new Array(cs.length).fill(null);if(cs.length<=p)re
 function adx(h,l,c,p=14){const o=new Array(c.length).fill(null);if(c.length<p*2)return o;const tr=[],pu=[],mi=[];for(let i=1;i<c.length;i++){const hi=h[i],lo=l[i],pc=c[i-1],ph=h[i-1],pl=l[i-1];tr.push(Math.max(hi-lo,Math.abs(hi-pc),Math.abs(lo-pc)));const up=hi-ph,dn=pl-lo;pu.push(up>dn&&up>0?up:0);mi.push(dn>up&&dn>0?dn:0)}function wild(a,p){const r=new Array(a.length).fill(null);let s=0;for(let i=0;i<p;i++)s+=a[i];r[p-1]=s;for(let i=p;i<a.length;i++)r[i]=r[i-1]-r[i-1]/p+a[i];return r}const str=wild(tr,p),spu=wild(pu,p),smi=wild(mi,p);const dx=[];for(let i=0;i<str.length;i++){if(i<p-1||!str[i]){dx.push(null);continue}const pd=100*spu[i]/str[i],md=100*smi[i]/str[i];dx.push(100*Math.abs(pd-md)/((pd+md)||1))}const ad=wild(dx.filter(v=>v!=null),p);let idx=p*2-2;for(let i=0;i<ad.length;i++){if(ad[i]!=null&&idx+i<c.length)o[idx+i]=ad[i]}return o}
 
 async function getData(pair){
-  if(Date.now()<backoffUntil)return null;
+  if(Date.now()<backoffUntil) return null;
   const keys=[settings.twKey,settings.twKey2,settings.twKey3].filter(Boolean);
   for(let i=0;i<keys.length;i++){
     try{
       const k=keys[(tdKeyIndex+i)%keys.length];
-      const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(pair)}&interval=1min&outputsize=50&apikey=${k}`;
+      const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(pair)}&interval=1min&outputsize=60&apikey=${k}`;
       const r=await fetch(url);
-      if(!r.ok) continue;
+      if(r.status===429){ continue; }
       const d=await r.json();
-      if(d && d.values && Array.isArray(d.values)){
+      if(d && Array.isArray(d.values) && d.values.length>20){
         tdKeyIndex=(tdKeyIndex+i)%keys.length;
-        return{src:'TW',values:d.values.reverse()};
+        // garante ordem crescente
+        const vals=d.values.reverse().map(v=>({datetime:v.datetime,open:+v.open,high:+v.high,low:+v.low,close:+v.close}));
+        return{src:'TW',values:vals};
       }
-    }catch(e){}
+      if(d && d.code===429){ continue; }
+    }catch(e){ /* tenta próxima */ }
+    await new Promise(r=>setTimeout(r,200)); // pequena pausa entre chaves
   }
-  // Alpha Vantage
-  if(settings.avKey){
-    try{
-      const [b,q]=pair.split('/');
-      const u=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${b}&to_symbol=${q}&interval=1min&outputsize=compact&apikey=${settings.avKey}`;
-      const r=await fetch(u); const d=await r.json(); const s=d['Time Series FX (1min)'];
-      if(s){
-        const v=Object.entries(s).slice(0,50).reverse().map(([t,x])=>({datetime:t,open:+x['1. open'],high:+x['2. high'],low:+x['3. low'],close:+x['4. close']}));
-        return{src:'AV',values:v};
-      }
-    }catch(e){}
-  }
-  // Yahoo fallback
-  try{
-    const yp=pair.replace('/','')+'=X';
-    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yp}?range=1d&interval=1m`);
-    const d=await r.json();
-    const res=d.chart?.result?.[0];
-    if(res){
-      const ts=res.timestamp||[]; const q=res.indicators?.quote?.[0]||{};
-      const vals=[];
-      for(let i=Math.max(0,ts.length-50);i<ts.length;i++){
-        if(q.close[i]!=null) vals.push({datetime:new Date(ts[i]*1000).toISOString(),open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]});
-      }
-      if(vals.length>5) return{src:'YH',values:vals};
-    }
-  }catch(e){}
+  // se todas falharem, espera 30s para não travar
+  backoffUntil=Date.now()+30000;
   addLog(`[${timeSP()}] Erro ${pair} (sem dados)`,'error');
   return null;
 }

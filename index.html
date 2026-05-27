@@ -215,6 +215,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Forex Assist v4.3.5 - Real Money ALL DAY</title>
 <meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
@@ -523,7 +526,7 @@ function saveSettings(){
 async function requestNotif(){
   if(!('Notification' in window))return alert('Notificações não suportadas');
   const p=await Notification.requestPermission();
-  if(p==='granted'){addLog(`[${timeSP()}] Notificações ativadas`);$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS'}
+  if(p==='granted'){addLog(`[${timeSP()}] Notificações ativadas`);$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS';$('#btnNotify').disabled=true}
 }
 
 function init(){
@@ -537,7 +540,7 @@ function init(){
   $('#btnNotify').onclick=requestNotif;
   $('#btnScanner').onclick=()=>scannerActive?stopScanner():startScanner();
   $('#clearLog').onclick=()=>{logEntries=[];localStorage.removeItem('fa_log_v435');$('#log').innerHTML=''};
-  if('Notification' in window && Notification.permission==='granted'){$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS'}
+  if('Notification' in window && Notification.permission==='granted'){$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS';$('#btnNotify').disabled=true}
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}

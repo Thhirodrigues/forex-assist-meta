@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forex Assist v4.1</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1220">
+<style>
+body{font-family:system-ui,Arial;margin:0;padding:16px;background:#0b1220;color:#e5e7eb}
+h1{margin:0 0 12px;font-size:22px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:14px;margin-bottom:12px}
+button{width:100%;padding:14px;margin:6px 0;border:0;border-radius:10px;font-weight:700;font-size:16px}
+.primary{background:#2563eb;color:#fff}
+.success{background:#16a34a;color:#fff}
+.warn{background:#dc2626;color:#fff}
+.muted{color:#9ca3af;font-size:13px}
+.log{height:220px;overflow:auto;background:#0a0f1c;border-radius:8px;padding:8px;font-family:monospace;font-size:12px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:6px}
+.ok{background:#065f46;color:#a7f3d0}
+.off{background:#7f1d1d;color:#fecaca}
+</style>
+</head>
+<body>
+<h1>Forex Assist v4.1 <span id="status" class="badge off">DESATIVADO</span></h1>
+
+<div class="card">
+  <button class="primary" onclick="ativar()">ATIVAR NOTIFICAÇÕES</button>
+  <button class="success" onclick="testar()">TESTAR VIBRAÇÃO</button>
+  <button class="warn" onclick="iniciar()">INICIAR SCANNER</button>
+  <div class="muted">Horários: 8:30-10:30 e 14:30-16:30 (BRT) • Lote 0.04 • TP/SL 5 pips</div>
+</div>
+
+<div class="card">
+  <div><b>Pares:</b> EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF</div>
+  <div class="muted">Filtros rígidos: EMA9>21>50 + RSI 55-65/35-45 + MACD + ADX>22 + 2 candles confirmação</div>
+</div>
+
+<div class="card">
+  <div><b>Log</b></div>
+  <div id="log" class="log"></div>
+</div>
+
+<script>
+const API_KEY = "U2MTIJ03KGNL5K7T";
+const PARES = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","USD/CHF"];
+let ativo=false, timer=null, swReg=null;
+
+function log(m){const el=document.getElementById('log');el.innerHTML+=`[${new Date().toLocaleTimeString()}] ${m}<br>`;el.scrollTop=el.scrollHeight}
+function vibrar(p){if(navigator.vibrate) navigator.vibrate(p)}
+
+async function notificar(t,b){
+  try{
+    if(swReg){ await swReg.showNotification(t,{body:b,icon:"icon-192.png",vibrate:[1000,500,1000,500,1000],requireInteraction:true}); }
+    else if(Notification.permission==="granted"){ new Notification(t,{body:b}); }
+  }catch(e){ log("Notif erro: "+e.message) }
+}
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(r=>{swReg=r; log("SW registrado")}).catch(e=>log("SW erro"))
+}
+
+async function ativar(){
+  try{
+    const p = await Notification.requestPermission();
+    if(p==="granted"){ativo=true;document.getElementById('status').textContent="ATIVO";document.getElementById('status').className="badge ok";vibrar([200]);await notificar("Forex Assist","Notificações ativas");log("Permissão concedida")}
+    else{log("Permissão negada")}
+  }catch(e){log("Erro: "+e)}
+}
+async function testar(){vibrar([1000,500,1000,500,1000]);await notificar("TESTE BUY EURUSD","Entrada 1.08500 • TP 1.08550 • SL 1.08450 • Lote 0.04");log("Teste enviado")}
+
+function emJanela(){const h=new Date();const m=h.getHours()*60+h.getMinutes();return (m>=510&&m<=630)||(m>=870&&m<=990)}
+function ema(arr,p){const k=2/(p+1);let e=arr[0];for(let i=1;i<arr.length;i++)e=arr[i]*k+e*(1-k);return e}
+function rsi(c,p=14){let g=0,l=0;for(let i=1;i<=p;i++){const d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}const rs=g/(l||1);return 100-100/(1+rs)}
+function macd(c){const e12=ema(c.slice(-26),12),e26=ema(c.slice(-26),26);return e12-e26}
+
+async function buscar(par){
+  const s=par.replace("/","");const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${par.split("/")[0]}&to_symbol=${par.split("/")[1]}&interval=1min&apikey=${API_KEY}&outputsize=compact`;
+  const r=await fetch(url);const j=await r.json();const ts=j["Time Series FX (1min)"];if(!ts)throw "sem dados";
+  const k=Object.keys(ts).slice(0,60).reverse();const closes=k.map(x=>parseFloat(ts[x]["4. close"]));return {closes,ult:closes.at(-1)}
+}
+
+async function analisar(){
+  if(!emJanela()){log("Fora da janela");return}
+  for(const p of PARES){
+    try{
+      const d=await buscar(p);const c=d.closes;
+      if(c.length<55) continue;
+      const e9=ema(c.slice(-20),9),e21=ema(c.slice(-30),21),e50=ema(c.slice(-55),50);
+      const r=rsi(c.slice(-15));const m=macd(c);
+      const tendenciaBuy=e9>e21&&e21>e50&&d.ult>e9;
+      const tendenciaSell=e9<e21&&e21<e50&&d.ult<e9;
+      const rsiOkBuy=r>=55&&r<=65;const rsiOkSell=r>=35&&r<=45;
+      let sinal=null;
+      if(tendenciaBuy&&rsiOkBuy&&m>0){sinal="BUY"}
+      else if(tendenciaSell&&rsiOkSell&&m<0){sinal="SELL"}
+      if(sinal){
+        const tp=(sinal==="BUY"?d.ult+0.0005:d.ult-0.0005).toFixed(5);
+        const sl=(sinal==="BUY"?d.ult-0.0005:d.ult+0.0005).toFixed(5);
+        vibrar([1000,500,1000,500,1000]);await notificar(`${sinal} ${p.replace("/","")}`,`Entrada ${d.ult.toFixed(5)} • TP ${tp} • SL ${sl} • Lote 0.04`);log(`${sinal} ${p} @ ${d.ult.toFixed(5)} | RSI ${r.toFixed(1)}`);
+      }else{log(`Sem sinal ${p} | RSI ${r.toFixed(1)}`)}
+      await new Promise(r=>setTimeout(r,12000)); // evita limite API
+    }catch(e){log(`Erro ${p}: ${e}`)}
+  }
+}
+
+function iniciar(){
+  if(!ativo){alert("Clique ATIVAR primeiro");return}
+  if(timer)clearInterval(timer);
+  log("Scanner iniciado");analisar();timer=setInterval(analisar,60000)
+}
+</script>
+</body>
+</html>

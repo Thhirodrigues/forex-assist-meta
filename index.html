@@ -314,29 +314,20 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
       <button id="closeSettings" class="close-btn">×</button>
     </div>
     
-    <label>API Key TwelveData (principal)</label>
-    <input id="twKey" class="input" placeholder="0921a1b1e8d4469cbe7c8697a4e62a85">
-    
-    <label>API Key Alpha Vantage (backup)</label>
-    <input id="avKey" class="input" placeholder="Opcional">
-    
-    <label>Pares ativos</label>
-    <div class="pairs-grid" id="pairsGrid">
-      <label><input type="checkbox" data-pair="EUR/USD"><span>EUR/USD</span></label>
-      <label><input type="checkbox" data-pair="GBP/USD"><span>GBP/USD</span></label>
-      <label><input type="checkbox" data-pair="USD/JPY"><span>USD/JPY</span></label>
-      <label><input type="checkbox" data-pair="AUD/USD"><span>AUD/USD</span></label>
-      <label><input type="checkbox" data-pair="USD/CAD"><span>USD/CAD</span></label>
-      <label><input type="checkbox" data-pair="NZD/USD"><span>NZD/USD</span></label>
-      <label><input type="checkbox" data-pair="USD/CHF"><span>USD/CHF</span></label>
-      <label><input type="checkbox" data-pair="EUR/JPY"><span>EUR/JPY</span></label>
-      <label><input type="checkbox" data-pair="GBP/JPY"><span>GBP/JPY</span></label>
-      <label><input type="checkbox" data-pair="AUD/JPY"><span>AUD/JPY</span></label>
-      <label><input type="checkbox" data-pair="EUR/GBP"><span>EUR/GBP</span></label>
-      <label><input type="checkbox" data-pair="EUR/AUD"><span>EUR/AUD</span></label>
-      <label><input type="checkbox" data-pair="GBP/AUD"><span>GBP/AUD</span></label>
-      <label><input type="checkbox" data-pair="AUD/CAD"><span>AUD/CAD</span></label>
-    </div>
+    <details id="apiDetails">
+      <summary style="cursor:pointer;font-weight:600;color:#e2e8f0;padding:8px 0">APIs (toque para expandir)</summary>
+      <label>API Key TwelveData (principal)</label>
+      <input id="twKey" class="input" placeholder="0921a1b1e8d4469cbe7c8697a4e62a85">
+      
+      <label>API Key TwelveData backup 1 (Trcbackup)</label>
+      <input id="twKey2" class="input" placeholder="31629773166e45c09ddcda8bb23dbdae">
+      
+      <label>API Key TwelveData backup 2 (Thi.backup02)</label>
+      <input id="twKey3" class="input" placeholder="011b938585f545b1819cab1a8306decb">
+      
+      <label>API Key Alpha Vantage (backup)</label>
+      <input id="avKey" class="input" placeholder="Opcional">
+    </details>
 
     <div class="grid-2">
       <div>
@@ -359,6 +350,25 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
     </div>
     <div class="small">Horário operacional: 07:30-18:00 (America/Sao_Paulo)</div>
 
+    <label>Pares ativos</label>
+    <div class="pairs-grid" id="pairsGrid">
+      <label><input type="checkbox" data-pair="EUR/USD"><span>EUR/USD</span></label>
+      <label><input type="checkbox" data-pair="GBP/USD"><span>GBP/USD</span></label>
+      <label><input type="checkbox" data-pair="USD/JPY"><span>USD/JPY</span></label>
+      <label><input type="checkbox" data-pair="AUD/USD"><span>AUD/USD</span></label>
+      <label><input type="checkbox" data-pair="USD/CAD"><span>USD/CAD</span></label>
+      <label><input type="checkbox" data-pair="NZD/USD"><span>NZD/USD</span></label>
+      <label><input type="checkbox" data-pair="USD/CHF"><span>USD/CHF</span></label>
+      <label><input type="checkbox" data-pair="EUR/JPY"><span>EUR/JPY</span></label>
+      <label><input type="checkbox" data-pair="GBP/JPY"><span>GBP/JPY</span></label>
+      <label><input type="checkbox" data-pair="AUD/JPY"><span>AUD/JPY</span></label>
+      <label><input type="checkbox" data-pair="EUR/GBP"><span>EUR/GBP</span></label>
+      <label><input type="checkbox" data-pair="EUR/AUD"><span>EUR/AUD</span></label>
+      <label><input type="checkbox" data-pair="GBP/AUD"><span>GBP/AUD</span></label>
+      <label><input type="checkbox" data-pair="AUD/CAD"><span>AUD/CAD</span></label>
+    </div>
+
+
     <button id="saveSettings" class="btn btn-blue" style="margin-top:16px">Salvar</button>
   </div>
 </div>
@@ -367,11 +377,11 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 const $=s=>document.querySelector(s);
 const timeSP=()=>new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false});
 
-let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false;
+let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0;
 const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
 
 function loadSettings(){
-  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:25,lote:0.04,tp:5,sl:5};
+  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:25,lote:0.04,tp:5,sl:5};
   try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v435')||'{}')}}catch{return d}
 }
 function saveSettingsLS(){localStorage.setItem('fa_settings_v435',JSON.stringify(settings))}
@@ -416,25 +426,57 @@ function adx(h,l,c,p=14){const o=new Array(c.length).fill(null);if(c.length<p*2)
 
 async function getData(pair){
   if(Date.now()<backoffUntil)return null;
-  try{
-    const sym=encodeURIComponent(pair);
-    const url=`https://api.twelvedata.com/time_series?symbol=${sym}&interval=1min&outputsize=50&apikey=${settings.twKey}`;
-    const r=await fetch(url);
-    if(r.status===429){backoffUntil=Date.now()+60000;addLog(`[${timeSP()}] TW limite - aguardando 60s`,'warn');return null}
-    const d=await r.json();
-    if(d.status==='error'||!d.values)throw new Error(d.message||'TW');
-    return{src:'TW',values:d.values.reverse()}
-  }catch(e){
-    if(settings.avKey){
-      try{
-        const [b,q]=pair.split('/');
-        const u=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${b}&to_symbol=${q}&interval=1min&outputsize=compact&apikey=${settings.avKey}`;
-        const r=await fetch(u);const d=await r.json();const s=d['Time Series FX (1min)'];if(!s)throw new Error('AV');
-        const v=Object.entries(s).slice(0,50).reverse().map(([t,x])=>({datetime:t,open:+x['1. open'],high:+x['2. high'],low:+x['3. low'],close:+x['4. close']}));
-        return{src:'AV',values:v}
-      }catch(e2){addLog(`[${timeSP()}] Erro ${pair} (TW/AV)`,'error');return null}
-    }else{addLog(`[${timeSP()}] Erro ${pair} (TW)`,'error');return null}
+  const keys=[settings.twKey,settings.twKey2,settings.twKey3].filter(k=>k);
+  for(let i=0;i<keys.length;i++){
+    const key=keys[(tdKeyIndex+i)%keys.length];
+    try{
+      const sym=encodeURIComponent(pair);
+      const url=`https://api.twelvedata.com/time_series?symbol=${sym}&interval=1min&outputsize=50&apikey=${key}`;
+      const r=await fetch(url);
+      if(r.status===429) continue;
+      const d=await r.json();
+      if(d.status==='error'||!d.values){
+        if(d.code===429 || (d.message&&d.message.includes('limit'))) continue;
+        throw new Error(d.message||'TW');
+      }
+      tdKeyIndex=(tdKeyIndex+i)%keys.length;
+      return{src:'TW',values:d.values.reverse()}
+    }catch(e){ continue }
   }
+  if(settings.avKey){
+    try{
+      const [b,q]=pair.split('/');
+      const u=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${b}&to_symbol=${q}&interval=1min&outputsize=compact&apikey=${settings.avKey}`;
+      const r=await fetch(u);const d=await r.json();const s=d['Time Series FX (1min)'];if(!s)throw new Error('AV');
+      const v=Object.entries(s).slice(0,50).reverse().map(([t,x])=>({datetime:t,open:+x['1. open'],high:+x['2. high'],low:+x['3. low'],close:+x['4. close']}));
+      return{src:'AV',values:v}
+    }catch(e2){}
+  }
+  // Fallback 1: Yahoo Finance (sem chave)
+  try{
+    const ypair=pair.replace('/','')+'=X';
+    const uy=`https://query1.finance.yahoo.com/v8/finance/chart/${ypair}?range=1d&interval=1m`;
+    const ry=await fetch(uy);
+    const dy=await ry.json();
+    const result=dy.chart.result[0];
+    const ts=result.timestamp.slice(-50);
+    const q=result.indicators.quote[0];
+    const values=ts.map((t,i)=>({datetime:new Date(t*1000).toISOString(),open:q.open[i],high:q.high[i],low:q.low[i],close:q.close[i]})).filter(v=>v.close);
+    if(values.length>10) return{src:'YH',values}
+  }catch(e3){}
+  // Fallback 2: exchangerate.host (sem chave, dados mais lentos)
+  try{
+    const [b,q]=pair.split('/');
+    const uh=`https://api.exchangerate.host/timeseries?base=${b}&symbols=${q}&start_date=${new Date(Date.now()-86400000).toISOString().slice(0,10)}&end_date=${new Date().toISOString().slice(0,10)}`;
+    const rh=await fetch(uh);const dh=await rh.json();
+    if(dh.rates){
+      const vals=Object.entries(dh.rates).map(([d,r])=>({datetime:d,open:r[q],high:r[q],low:r[q],close:r[q]}));
+      if(vals.length) return{src:'EX',values:vals.slice(-50)}
+    }
+  }catch(e4){}
+  addLog(`[${timeSP()}] Erro ${pair} (todas fontes)`, 'error');
+  return null
+}else{addLog(`[${timeSP()}] Erro ${pair} (todas chaves)`,'error');return null}
 }
 
 function processPair(pair,data){
@@ -511,6 +553,8 @@ function openSettings(){
 }
 function saveSettings(){
   settings.twKey=$('#twKey').value.trim()||settings.twKey;
+  settings.twKey2=$('#twKey2').value.trim();
+  settings.twKey3=$('#twKey3').value.trim();
   settings.avKey=$('#avKey').value.trim();
   settings.mode=$('#mode').value;
   settings.delay=Math.max(10,parseInt($('#delay').value)||25);

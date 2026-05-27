@@ -1,0 +1,11 @@
+{
+  "name": "Forex Assist v4.1",
+  "short_name": "Forex Assist",
+  "start_url": "/forex-assist/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#2563eb",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}

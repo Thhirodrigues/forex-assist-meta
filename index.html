@@ -213,7 +213,7 @@
 </script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Forex Assist v4.3.6 - Real Money ALL DAY</title>
+<title>Forex Assist v4.3.8 - XM Link</title>
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-512.png">
@@ -273,7 +273,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 <div class="app">
   <header>
     <div>
-      <div class="title">Forex Assist v4.3.6</div>
+      <div class="title">Forex Assist v4.3.8</div>
       <div class="subtitle">Real Money ALL DAY <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
     </div>
     <div style="display:flex;gap:9px;align-items:center">
@@ -317,13 +317,13 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
     <details>
       <summary style="cursor:pointer;font-weight:700;color:#e2e8f0;padding:6px 0;margin-bottom:6px">APIs (toque para expandir)</summary>
       <label>API Key TwelveData (principal)</label>
-      <input id="twKey" class="input" placeholder="0921a1b1e8d4469cbe7c8697a4e62a85">
+      <input id="twKey" autocomplete="off" spellcheck="false" class="input" placeholder="0921a1b1e8d4469cbe7c8697a4e62a85">
       
       <label>API Key TwelveData backup 1</label>
-      <input id="twKey2" class="input" placeholder="31629773166e45c09ddcda8bb23dbdae">
+      <input id="twKey2" autocomplete="off" spellcheck="false" class="input" placeholder="31629773166e45c09ddcda8bb23dbdae">
       
       <label>API Key TwelveData backup 2</label>
-      <input id="twKey3" class="input" placeholder="011b938585f545b1819cab1a8306decb">
+      <input id="twKey3" autocomplete="off" spellcheck="false" class="input" placeholder="011b938585f545b1819cab1a8306decb">
       
       <label>API Key Alpha Vantage (backup)</label>
       <input id="avKey" class="input" placeholder="Opcional">
@@ -474,11 +474,11 @@ function processPair(pair,data){
   if(buy>=thr&&buy>sell){dir='BUY';score=buy}
   else if(sell>=thr&&sell>buy){dir='SELL';score=sell}
   if(dir){
-    addLog(`[${timeSP()}] SINAL ${dir} ${pair} score ${score}`,'signal');
+    addLog(`[${timeSP()}] <span onclick="window.open('intent://#Intent;package=com.xm.xmtrader;end','_blank')" style="cursor:pointer;text-decoration:underline">SINAL ${dir} ${pair} score ${score} → Abrir XM</span>`,'signal');
     trades.sinais++;localStorage.setItem(todayKey,JSON.stringify(trades));updateResumo();
     if(navigator.vibrate)navigator.vibrate([200,100,200]);
     if(window.Notification&&Notification.permission==='granted'){
-      try{new Notification(`Forex Assist • ${pair} ${dir}`,{body:`Score ${score} • TP ${settings.tp} SL ${settings.sl} • Lote ${settings.lote}`})}catch{}
+      try{const n=new Notification(`Forex Assist • ${pair} ${dir}`,{body:`Score ${score} • TP ${settings.tp} SL ${settings.sl} • Lote ${settings.lote} • Toque para XM`}); n.onclick=()=>{window.open('intent://#Intent;package=com.xm.xmtrader;end','_blank')}}catch{}
     }
   }
 }
@@ -522,14 +522,14 @@ function stopScanner(){
 }
 
 function openSettings(){
-  $('#twKey').value=settings.twKey;$('#avKey').value=settings.avKey;$('#mode').value=settings.mode;$('#delay').value=settings.delay;$('#lote').value=settings.lote;$('#tp').value=settings.tp;$('#sl').value=settings.sl;
+  $('#twKey').value=settings.twKey;$('#twKey2').value=settings.twKey2;$('#twKey3').value=settings.twKey3;$('#avKey').value=settings.avKey;$('#mode').value=settings.mode;$('#delay').value=settings.delay;$('#lote').value=settings.lote;$('#tp').value=settings.tp;$('#sl').value=settings.sl;
   document.querySelectorAll('#pairsGrid input').forEach(cb=>cb.checked=settings.pairsActive.includes(cb.dataset.pair));
   $('#settingsModal').classList.add('show');
 }
 function saveSettings(){
   settings.twKey=$('#twKey').value.trim()||settings.twKey;
-  settings.twKey2=$('#twKey2').value.trim();
-  settings.twKey3=$('#twKey3').value.trim();
+  settings.twKey2=$('#twKey2').value.trim()||settings.twKey2;
+  settings.twKey3=$('#twKey3').value.trim()||settings.twKey3;
   settings.avKey=$('#avKey').value.trim();
   settings.mode=$('#mode').value;
   settings.delay=Math.max(10,parseInt($('#delay').value)||25);
@@ -563,7 +563,7 @@ function init(){
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
-  addLog(`[${timeSP()}] Forex Assist v4.3.6 pronto`);
+  addLog(`[${timeSP()}] Forex Assist v4.3.8 pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

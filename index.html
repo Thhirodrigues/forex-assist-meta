@@ -239,7 +239,16 @@ input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #374151;b
 </style>
 </head>
 <body>
-<h1>Forex Assist v4.3 - Real Money <img src="icon-192.png" style="height:24px;vertical-align:middle;margin-left:4px;border-radius:6px"> <span><span id="status" class="badge off">DESATIVADO</span><button class="gear" onclick="abrirCfg()">⚙️</button></span></h1>
+<h1 style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:nowrap">
+  <span style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+    <span style="font-size:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Forex Assist v4.3 - Real Money</span>
+    <img src="icon-32.png" style="height:26px;width:26px;border-radius:6px;flex-shrink:0">
+  </span>
+  <span style="display:flex;align-items:center;gap:8px">
+    <span id="status" class="badge off">DESATIVADO</span>
+    <button class="gear" onclick="abrirCfg()">⚙️</button>
+  </span>
+</h1>
 
 <div class="card">
   <button class="primary" onclick="ativar()">ATIVAR NOTIFICAÇÕES</button>

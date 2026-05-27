@@ -376,11 +376,11 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 const $=s=>document.querySelector(s);
 const timeSP=()=>new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false});
 
-let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0;
+let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0, cycleCount=0;
 const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
 
 function loadSettings(){
-  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:25,lote:0.04,tp:5,sl:5};
+  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:55,lote:0.04,tp:5,sl:5};
   try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v435')||'{}')}}catch{return d}
 }
 function saveSettingsLS(){localStorage.setItem('fa_settings_v435',JSON.stringify(settings))}
@@ -425,7 +425,7 @@ function adx(h,l,c,p=14){const o=new Array(c.length).fill(null);if(c.length<p*2)
 
 async function getData(pair){
   if(Date.now()<backoffUntil) return null;
-  const keys=[settings.twKey,settings.twKey2,settings.twKey3].filter(Boolean);
+  const keys=[settings.twKey3,settings.twKey2,settings.twKey].filter(Boolean);
   for(let i=0;i<keys.length;i++){
     try{
       const k=keys[(tdKeyIndex+i)%keys.length];
@@ -487,10 +487,15 @@ async function scanCycle(){
   if(scanning||!scannerActive)return;
   scanning=true;
   try{
-    if(!inWindow()){/* fora do horário silencioso */return}
+    if(!inWindow()){return}
     if(Date.now()<backoffUntil)return;
+    cycleCount++;
+    const tier1=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD'];
     for(const pair of settings.pairsActive){
       if(!scannerActive)break;
+      const isTier1=tier1.includes(pair);
+      const shouldScan=isTier1 || (cycleCount%3===0);
+      if(!shouldScan)continue;
       const data=await getData(pair);
       if(data)processPair(pair,data);
       await new Promise(r=>setTimeout(r,700));

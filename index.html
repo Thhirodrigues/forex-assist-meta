@@ -410,7 +410,7 @@ function addLog(text,type=''){
 function renderLogEntry(e){
   const d=document.createElement('div');
   d.className='log-entry'+(e.type==='signal'?' log-signal':e.type==='error'?' log-error':e.type==='warn'?' log-warn':'');
-  d.textContent=e.text;
+  d.innerHTML=e.text;
   const l=$('#log');
   l.appendChild(d);
   l.scrollTop=l.scrollHeight;

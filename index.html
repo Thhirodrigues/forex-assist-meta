@@ -273,7 +273,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 <div class="app">
   <header>
     <div>
-      <div class="title">Forex Assist v4.3.9</div>
+      <div class="title">Forex Assist v4.3.9c</div>
       <div class="subtitle">Real Money ALL DAY <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
     </div>
     <div style="display:flex;gap:9px;align-items:center">
@@ -361,15 +361,21 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
       </div>
     </div>
 
+    <div class="grid-2">
+      <div><label>Início</label><input id="start" type="time" class="input" value="07:30"></div>
+      <div><label>Fim</label><input id="end" type="time" class="input" value="18:00"></div>
+    </div>
+
     <div class="grid-3">
       <div><label>Lote</label><input id="lote" type="number" step="0.01" class="input" value="0.04"></div>
       <div><label>TP (pips)</label><input id="tp" type="number" class="input" value="5"></div>
       <div><label>SL (pips)</label><input id="sl" type="number" class="input" value="5"></div>
     </div>
-    <div class="small">Horário operacional: 07:30-18:00 (America/Sao_Paulo)</div>
+    <div class="small">Horário operacional (America/Sao_Paulo)</div>
 
     <button id="saveSettings" class="btn btn-blue" style="margin-top:16px">Salvar</button>
     <button id="clearSignals" class="btn" style="margin-top:8px;background:#334155;border:1px solid #475569">Limpar sinais pendentes</button>
+    <button id="resetCounters" class="btn" style="margin-top:8px;background:#7c2d12;border:1px solid #92400e">Zerar contadores do dia</button>
   </div>
 </div>
 
@@ -381,13 +387,13 @@ let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, 
 const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
 
 function loadSettings(){
-  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:55,lote:0.04,tp:5,sl:5};
+  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:55,lote:0.04,tp:5,sl:5,start:"07:30",end:"18:00"};
   try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v435')||'{}')}}catch{return d}
 }
 function saveSettingsLS(){localStorage.setItem('fa_settings_v435',JSON.stringify(settings))}
 
 function updateInfoLine(){
-  $('#infoLine').textContent=`Horários: 07:30-18:00 • Lote ${settings.lote} • TP/SL ${settings.tp}/${settings.sl} pips`;
+  $('#infoLine').textContent=`Horários: ${settings.start}-${settings.end} • Lote ${settings.lote} • TP/SL ${settings.tp}/${settings.sl} pips`;
 }
 function updatePairsUI(){
   $('#pairCount').textContent=`${settings.pairsActive.length}/14`;
@@ -417,7 +423,7 @@ function renderLogEntry(e){
 }
 function renderLog(){ $('#log').innerHTML=''; logEntries.forEach(renderLogEntry) }
 function setActive(a){ const b=$('#badge'); b.textContent=a?'ATIVO':'DESATIVADO'; b.className='badge '+(a?'ativo':'desativado') }
-function inWindow(){ const n=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'})); const m=n.getHours()*60+n.getMinutes(); return m>=450 && m<1080 }
+function inWindow(){ const n=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'})); const m=n.getHours()*60+n.getMinutes(); const [sh,sm]=settings.start.split(':').map(Number); const [eh,em]=settings.end.split(':').map(Number); return m>=sh*60+sm && m<eh*60+em }
 
 function ema(arr,p){const o=new Array(arr.length).fill(null);if(arr.length<p)return o;let s=0;for(let i=0;i<p;i++)s+=arr[i];o[p-1]=s/p;const k=2/(p+1);for(let i=p;i<arr.length;i++)o[i]=arr[i]*k+o[i-1]*(1-k);return o}
 function emaNull(arr,p){const o=new Array(arr.length).fill(null);const v=[];for(let i=0;i<arr.length;i++)if(arr[i]!=null)v.push({i,v:arr[i]});if(v.length<p)return o;let s=0;for(let i=0;i<p;i++)s+=v[i].v;o[v[p-1].i]=s/p;const k=2/(p+1);for(let i=p;i<v.length;i++){o[v[i].i]=v[i].v*k+o[v[i-1].i]*(1-k)}return o}
@@ -588,6 +594,11 @@ async function processOpenSignals(){
 function init(){
   const clearBtn=document.getElementById('clearSignals');
   if(clearBtn) clearBtn.onclick=()=>{localStorage.removeItem('fa_signals_open');openSignals=[];addLog(`[${timeSP()}] Sinais pendentes limpos`,'info');alert('Sinais pendentes apagados');};
+  const resetBtn=document.getElementById('resetCounters');
+  if(resetBtn) resetBtn.onclick=()=>{trades={sinais:0,tp:0,sl:0};localStorage.setItem(todayKey,JSON.stringify(trades));updateResumo();addLog(`[${timeSP()}] Contadores zerados`,'info');alert('Contadores do dia zerados');};
+
+  const clearBtn=document.getElementById('clearSignals');
+  if(clearBtn) clearBtn.onclick=()=>{localStorage.removeItem('fa_signals_open');openSignals=[];addLog(`[${timeSP()}] Sinais pendentes limpos`,'info');alert('Sinais pendentes apagados');};
 
   settings=loadSettings();
   trades=JSON.parse(localStorage.getItem(todayKey)||'{"sinais":0,"tp":0,"sl":0}');
@@ -605,7 +616,7 @@ function init(){
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
-  addLog(`[${timeSP()}] Forex Assist v4.3.9 pronto`);
+  addLog(`[${timeSP()}] Forex Assist v4.3.9c pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

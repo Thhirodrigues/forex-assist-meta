@@ -1,219 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- Playables SDK -->
-<script>// Playables SDK v1.0.0
-// Game lifecycle bridge: rAF-based game-ready detection + event communication
-(function() {
-  'use strict';
-
-  // Idempotency: skip if already initialized (e.g., server-side injection
-  // followed by client-side inject-javascript via the Bloks webview component).
-  if (window.playablesSDK) return;
-
-  var HANDLER_NAME = 'playablesGameEventHandler';
-  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
-  var RAF_FRAME_THRESHOLD = 3;
-
-  var gameReadySent = false;
-  var firstInteractionSent = false;
-  var errorSent = false;
-  var frameCount = 0;
-  var originalRAF = window.requestAnimationFrame;
-
-  // --- Transport Layer ---
-
-  function hasIOSBridge() {
-    return !!(window.webkit &&
-              window.webkit.messageHandlers &&
-              window.webkit.messageHandlers[HANDLER_NAME]);
-  }
-
-  function hasAndroidBridge() {
-    return !!(window[ANDROID_BRIDGE_NAME] &&
-              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
-  }
-
-  function isInIframe() {
-    return !!(window.parent && window.parent !== window);
-  }
-
-  function sendEvent(eventName, payload) {
-    var message = {
-      type: eventName,
-      payload: payload || {},
-      timestamp: Date.now()
-    };
-
-    if (hasIOSBridge()) {
-      try {
-        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
-      } catch (e) { /* ignore */ }
-      return;
-    }
-
-    if (hasAndroidBridge()) {
-    try {
-      var p = payload || {};
-      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
-      p.timestamp = message.timestamp;
-      window[ANDROID_BRIDGE_NAME].postEvent(
-        eventName,
-        JSON.stringify(p)
-      );
-    } catch (e) { /* ignore */ }
-    return;
-  }
-
-    if (isInIframe()) {
-      try {
-        window.parent.postMessage(message, '*');
-      } catch (e) { /* ignore */ }
-      return;
-    }
-  }
-
-  // --- rAF Game-Ready Detection ---
-
-  function onFrame() {
-    if (gameReadySent) return;
-
-    frameCount++;
-    if (frameCount >= RAF_FRAME_THRESHOLD) {
-      gameReadySent = true;
-      sendEvent('game_ready', {
-        frame_count: frameCount,
-        detected_at: Date.now()
-      });
-      return;
-    }
-
-    originalRAF.call(window, onFrame);
-  }
-
-  if (originalRAF) {
-    window.requestAnimationFrame = function(callback) {
-      if (!gameReadySent) {
-        return originalRAF.call(window, function(timestamp) {
-          frameCount++;
-          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
-            gameReadySent = true;
-            sendEvent('game_ready', {
-              frame_count: frameCount,
-              detected_at: Date.now()
-            });
-          }
-          callback(timestamp);
-        });
-      }
-      return originalRAF.call(window, callback);
-    };
-  }
-
-  // --- First User Interaction Detection ---
-
-  function setupFirstInteractionDetection() {
-    var events = ['touchstart', 'mousedown', 'keydown'];
-
-    function onFirstInteraction() {
-      if (firstInteractionSent) return;
-      firstInteractionSent = true;
-      sendEvent('user_interaction_start', null);
-
-      for (var i = 0; i < events.length; i++) {
-        document.removeEventListener(events[i], onFirstInteraction, true);
-      }
-    }
-
-    for (var i = 0; i < events.length; i++) {
-      document.addEventListener(events[i], onFirstInteraction, true);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
-  } else {
-    setupFirstInteractionDetection();
-  }
-
-  // --- Auto Error Capture ---
-
-  window.addEventListener('error', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    sendEvent('error', {
-      message: event.message || 'Unknown error',
-      source: event.filename || '',
-      lineno: event.lineno || 0,
-      colno: event.colno || 0,
-      auto_captured: true
-    });
-  });
-
-  window.addEventListener('unhandledrejection', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    var reason = event.reason;
-    sendEvent('error', {
-      message: (reason instanceof Error) ? reason.message : String(reason),
-      type: 'unhandled_promise_rejection',
-      auto_captured: true
-    });
-  });
-
-  // --- Public API ---
-
-  window.playablesSDK = {
-    complete: function(score) {
-      sendEvent('game_ended', {
-        score: score,
-        completed: true
-      });
-    },
-
-    error: function(message) {
-      if (errorSent) return;
-      errorSent = true;
-      sendEvent('error', {
-        message: message || 'Unknown error',
-        auto_captured: false
-      });
-    },
-
-    sendEvent: function(eventName, payload) {
-      if (!eventName || typeof eventName !== 'string') return;
-      sendEvent(eventName, payload);
-    }
-  };
-
-  // Kick off rAF detection in case no game code calls rAF immediately
-  if (originalRAF) {
-    originalRAF.call(window, onFrame);
-  }
-})();</script>
-<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
-(function() {
-  if (window.__playableTouchPatchInstalled) return;
-  window.__playableTouchPatchInstalled = true;
-  var origAdd = EventTarget.prototype.addEventListener;
-  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (blockedTypes[type]) {
-      if (options === undefined || options === null) {
-        options = { passive: true };
-      } else if (typeof options === 'boolean') {
-        options = { capture: options, passive: true };
-      } else {
-        options = Object.assign({}, options, { passive: true });
-      }
-    }
-    return origAdd.call(this, type, listener, options);
-  };
-})();
-</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Forex Assist v4.3.8 - XM Link</title>
+<title>Forex Assist v4.3.9 - Resultados</title>
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-512.png">
@@ -376,7 +166,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 const $=s=>document.querySelector(s);
 const timeSP=()=>new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false});
 
-let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0, cycleCount=0;
+let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0, cycleCount=0, openSignals=[];
 const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
 
 function loadSettings(){
@@ -480,6 +270,13 @@ function processPair(pair,data){
     if(window.Notification&&Notification.permission==='granted'){
       try{const n=new Notification(`Forex Assist • ${pair} ${dir}`,{body:`Score ${score} • TP ${settings.tp} SL ${settings.sl} • Lote ${settings.lote} • Toque para XM`}); n.onclick=()=>{window.open('intent://#Intent;package=com.xm.xmtrader;end','_blank')}}catch{}
     }
+    // salva sinal aberto para rastrear TP/SL mesmo offline
+    const entry = closes[last];
+    const pip = pair.includes('JPY') ? 0.01 : 0.0001;
+    const tpPrice = dir==='BUY' ? entry + settings.tp*pip : entry - settings.tp*pip;
+    const slPrice = dir==='BUY' ? entry - settings.sl*pip : entry + settings.sl*pip;
+    const sig = {id: Date.now()+'_'+pair, pair, dir, entry, tpPrice, slPrice, time: Date.now(), timeStr: timeSP(), status:'open'};
+    openSignals.push(sig); localStorage.setItem('fa_signals_open', JSON.stringify(openSignals));
   }
 }
 
@@ -511,7 +308,7 @@ async function startScanner(){
   try{if('wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');console.log('Wake Lock ativo');addLog(`[${timeSP()}] Wake Lock ativo`);wakeLock.addEventListener('release',()=>console.log('Wake Lock liberado'))}}catch{}
   scanCycle();
   clearInterval(scannerInterval);
-  scannerInterval=setInterval(scanCycle,Math.max(10,settings.delay)*1000);
+  scannerInterval=setInterval(()=>{scanCycle(); if(cycleCount%2===0) processOpenSignals();},Math.max(10,settings.delay)*1000);
 }
 function stopScanner(){
   scannerActive=false;setActive(false);
@@ -548,11 +345,45 @@ async function requestNotif(){
   if(p==='granted'){addLog(`[${timeSP()}] Notificações ativadas`);$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS';$('#btnNotify').disabled=true}
 }
 
+
+async function processOpenSignals(){
+  if(!openSignals.length) return;
+  const key = settings.twKey || settings.twKey2 || settings.twKey3;
+  if(!key) return;
+  const stillOpen=[];
+  for(const s of openSignals){
+    try{
+      const start = new Date(s.time).toISOString().replace('T',' ').substring(0,19);
+      const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=1min&start_date=${start}&outputsize=500&apikey=${key}`;
+      const r = await fetch(url); const j = await r.json();
+      if(!j.values){ stillOpen.push(s); continue; }
+      const candles = j.values.reverse();
+      let fechou=false;
+      for(const c of candles){
+        const h=parseFloat(c.high), l=parseFloat(c.low);
+        const hora = c.datetime.split(' ')[1].substring(0,5);
+        if(s.dir==='BUY'){
+          if(h>=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +${settings.tp} pips (sinal ${s.timeStr})`,'success'); trades.tp++; fechou=true; break; }
+          if(l<=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -${settings.sl} pips (sinal ${s.timeStr})`,'error'); trades.sl++; fechou=true; break; }
+        }else{
+          if(l<=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +${settings.tp} pips (sinal ${s.timeStr})`,'success'); trades.tp++; fechou=true; break; }
+          if(h>=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -${settings.sl} pips (sinal ${s.timeStr})`,'error'); trades.sl++; fechou=true; break; }
+        }
+      }
+      if(!fechou) stillOpen.push(s); else { localStorage.setItem(todayKey, JSON.stringify(trades)); updateResumo(); if(navigator.vibrate) navigator.vibrate([100,50,100]); }
+    }catch(e){ stillOpen.push(s); }
+  }
+  openSignals = stillOpen;
+  localStorage.setItem('fa_signals_open', JSON.stringify(openSignals));
+}
+
 function init(){
   settings=loadSettings();
   trades=JSON.parse(localStorage.getItem(todayKey)||'{"sinais":0,"tp":0,"sl":0}');
+  openSignals=JSON.parse(localStorage.getItem('fa_signals_open')||'[]');
   logEntries=JSON.parse(localStorage.getItem('fa_log_v435')||'[]');
   updateInfoLine();updatePairsUI();updateResumo();renderLog();
+  setTimeout(processOpenSignals,3000);
   $('#btnSettings').onclick=openSettings;
   $('#closeSettings').onclick=()=>$('#settingsModal').classList.remove('show');
   $('#saveSettings').onclick=saveSettings;
@@ -563,7 +394,7 @@ function init(){
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
-  addLog(`[${timeSP()}] Forex Assist v4.3.8 pronto`);
+  addLog(`[${timeSP()}] Forex Assist v4.3.9 pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

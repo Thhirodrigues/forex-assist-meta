@@ -586,6 +586,9 @@ async function processOpenSignals(){
 }
 
 function init(){
+  const clearBtn=document.getElementById('clearSignals');
+  if(clearBtn) clearBtn.onclick=()=>{localStorage.removeItem('fa_signals_open');openSignals=[];addLog(`[${timeSP()}] Sinais pendentes limpos`,'info');alert('Sinais pendentes apagados');};
+
   settings=loadSettings();
   trades=JSON.parse(localStorage.getItem(todayKey)||'{"sinais":0,"tp":0,"sl":0}');
   openSignals=JSON.parse(localStorage.getItem('fa_signals_open')||'[]');

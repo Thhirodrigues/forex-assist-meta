@@ -213,37 +213,48 @@
 </script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Forex Assist v4.1</title>
+<title>Forex Assist v4.3 - Real Money</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b1220">
 <style>
 body{font-family:system-ui,Arial;margin:0;padding:16px;background:#0b1220;color:#e5e7eb}
-h1{margin:0 0 12px;font-size:22px}
+h1{margin:0 0 12px;font-size:22px;display:flex;align-items:center;justify-content:space-between}
 .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:14px;margin-bottom:12px}
 button{width:100%;padding:14px;margin:6px 0;border:0;border-radius:10px;font-weight:700;font-size:16px}
 .primary{background:#2563eb;color:#fff}
-.success{background:#16a34a;color:#fff}
 .warn{background:#dc2626;color:#fff}
 .muted{color:#9ca3af;font-size:13px}
-.log{height:220px;overflow:auto;background:#0a0f1c;border-radius:8px;padding:8px;font-family:monospace;font-size:12px}
+.log{height:200px;overflow:auto;background:#0a0f1c;border-radius:8px;padding:8px;font-family:monospace;font-size:12px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:6px}
 .ok{background:#065f46;color:#a7f3d0}
 .off{background:#7f1d1d;color:#fecaca}
+.gear{font-size:20px;background:none;border:0;color:#9ca3af;cursor:pointer}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px}
+.modal .box{background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;max-width:420px;width:100%;max-height:90vh;overflow:auto}
+label{display:block;margin:8px 0 4px;font-size:13px;color:#d1d5db}
+input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #374151;background:#0b1220;color:#e5e7eb}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.summary{display:flex;gap:12px;flex-wrap:wrap}
+.summary div{background:#0a0f1c;padding:8px 12px;border-radius:8px;font-size:13px}
 </style>
 </head>
 <body>
-<h1>Forex Assist v4.1 <span id="status" class="badge off">DESATIVADO</span></h1>
+<h1>Forex Assist v4.3 - Real Money <img src="icon-192.png" style="height:18px;vertical-align:middle;margin-left:6px;border-radius:4px"> <span><span id="status" class="badge off">DESATIVADO</span><button class="gear" onclick="abrirCfg()">⚙️</button></span></h1>
 
 <div class="card">
   <button class="primary" onclick="ativar()">ATIVAR NOTIFICAÇÕES</button>
-  <button class="success" onclick="testar()">TESTAR VIBRAÇÃO</button>
   <button class="warn" onclick="iniciar()">INICIAR SCANNER</button>
-  <div class="muted">Horários: 8:30-10:30 e 14:30-16:30 (BRT) • Lote 0.04 • TP/SL 5 pips</div>
+  <div class="muted">Horários: <span id="hshow"></span> • Lote <span id="lshow"></span> • TP/SL <span id="tpshow"></span> pips</div>
 </div>
 
 <div class="card">
-  <div><b>Pares:</b> EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, USDCHF</div>
-  <div class="muted">Filtros rígidos: EMA9>21>50 + RSI 55-65/35-45 + MACD + ADX>22 + 2 candles confirmação</div>
+  <div><b>Resumo do dia</b></div>
+  <div class="summary" id="resumo"><div>Sinais: 0</div><div>TP: 0</div><div>SL: 0</div><div>Acerto: 0%</div></div>
+</div>
+
+<div class="card">
+  <div><b>Pares ativos</b> <span class="muted" id="paresInfo"></span></div>
+  <div class="muted">Filtros: EMA9>21>50 • RSI 55-65/35-45 • MACD • ADX>22 • 2 candles • delay 14s</div>
 </div>
 
 <div class="card">
@@ -251,74 +262,76 @@ button{width:100%;padding:14px;margin:6px 0;border:0;border-radius:10px;font-wei
   <div id="log" class="log"></div>
 </div>
 
+<div class="modal" id="cfg">
+<div class="box">
+<h3>Configurações</h3>
+<label>API Key Alpha Vantage</label><input id="cfg_apikey">
+<label>Lote</label><select id="cfg_lote"><option>0.01</option><option>0.02</option><option>0.04</option><option>0.05</option></select>
+<div class="grid"><div><label>TP pips</label><input id="cfg_tp" type="number" value="5"></div><div><label>SL pips</label><input id="cfg_sl" type="number" value="5"></div></div>
+<label>Horário manhã</label><input id="cfg_m1" value="08:30"> - <input id="cfg_m2" value="10:30">
+<label>Horário tarde</label><input id="cfg_t1" value="14:30"> - <input id="cfg_t2" value="16:30">
+<label>Modo</label><select id="cfg_modo"><option value="75">Normal (score>75)</option><option value="85">Conservador (>85)</option><option value="65">Agressivo (>65)</option></select>
+<label>Pares (marque)</label><div id="cfg_pares" style="max-height:150px;overflow:auto;font-size:13px"></div>
+<div style="display:flex;gap:8px;margin-top:12px"><button class="primary" onclick="salvarCfg()">Salvar</button><button onclick="fecharCfg()" style="background:#374151;color:#fff;border:0;padding:10px;border-radius:8px;flex:1">Fechar</button></div>
+</div></div>
+
 <script>
-const API_KEY = "U2MTIJ03KGNL5K7T";
-const PARES = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","USD/CHF"];
-let ativo=false, timer=null, swReg=null;
+const PARES_ALL = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","USD/CHF","NZD/USD","EUR/GBP","EUR/JPY","GBP/JPY","EUR/AUD","GBP/AUD","AUD/JPY","AUD/CAD"];
+let cfg = JSON.parse(localStorage.getItem('forex_cfg')||'{}');
+cfg.apikey = cfg.apikey || "U2MTIJ03KGNL5K7T";
+cfg.lote = cfg.lote || "0.04"; cfg.tp=cfg.tp||5; cfg.sl=cfg.sl||5;
+cfg.m1=cfg.m1||"08:30"; cfg.m2=cfg.m2||"10:30"; cfg.t1=cfg.t1||"14:30"; cfg.t2=cfg.t2||"16:30";
+cfg.modo=cfg.modo||75; cfg.pares=cfg.pares||PARES_ALL.slice(0,7);
+
+let ativo=false, timer=null, swReg=null, trades=JSON.parse(localStorage.getItem('forex_trades_'+new Date().toISOString().slice(0,10))||'[]');
 
 function log(m){const el=document.getElementById('log');el.innerHTML+=`[${new Date().toLocaleTimeString()}] ${m}<br>`;el.scrollTop=el.scrollHeight}
-function vibrar(p){if(navigator.vibrate) navigator.vibrate(p)}
+function vibrar(){if(navigator.vibrate) navigator.vibrate([1000,500,1000,500,1000])}
+async function notificar(t,b){try{if(swReg) await swReg.showNotification(t,{body:b,icon:"icon-192.png",vibrate:[1000,500,1000,500,1000],requireInteraction:true});}catch(e){}}
 
-async function notificar(t,b){
-  try{
-    if(swReg){ await swReg.showNotification(t,{body:b,icon:"icon-192.png",vibrate:[1000,500,1000,500,1000],requireInteraction:true}); }
-    else if(Notification.permission==="granted"){ new Notification(t,{body:b}); }
-  }catch(e){ log("Notif erro: "+e.message) }
-}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').then(r=>{swReg=r;log("SW registrado")})}
 
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').then(r=>{swReg=r; log("SW registrado")}).catch(e=>log("SW erro"))
-}
+function atualizaUI(){document.getElementById('hshow').textContent=cfg.m1+"-"+cfg.m2+" e "+cfg.t1+"-"+cfg.t2; document.getElementById('lshow').textContent=cfg.lote; document.getElementById('tpshow').textContent=cfg.tp; document.getElementById('paresInfo').textContent=cfg.pares.length+" pares"; atualizaResumo()}
+function atualizaResumo(){const tp=trades.filter(t=>t.result==='TP').length; const sl=trades.filter(t=>t.result==='SL').length; const tot=trades.length; const ac=tot?Math.round(tp/tot*100):0; document.getElementById('resumo').innerHTML=`<div>Sinais: ${tot}</div><div>TP: ${tp}</div><div>SL: ${sl}</div><div>Acerto: ${ac}%</div>`; localStorage.setItem('forex_trades_'+new Date().toISOString().slice(0,10), JSON.stringify(trades))}
+atualizaUI();
 
-async function ativar(){
-  try{
-    const p = await Notification.requestPermission();
-    if(p==="granted"){ativo=true;document.getElementById('status').textContent="ATIVO";document.getElementById('status').className="badge ok";vibrar([200]);await notificar("Forex Assist","Notificações ativas");log("Permissão concedida")}
-    else{log("Permissão negada")}
-  }catch(e){log("Erro: "+e)}
-}
-async function testar(){vibrar([1000,500,1000,500,1000]);await notificar("TESTE BUY EURUSD","Entrada 1.08500 • TP 1.08550 • SL 1.08450 • Lote 0.04");log("Teste enviado")}
+function abrirCfg(){document.getElementById('cfg').style.display='flex'; document.getElementById('cfg_apikey').value=cfg.apikey; document.getElementById('cfg_lote').value=cfg.lote; document.getElementById('cfg_tp').value=cfg.tp; document.getElementById('cfg_sl').value=cfg.sl; document.getElementById('cfg_m1').value=cfg.m1; document.getElementById('cfg_m2').value=cfg.m2; document.getElementById('cfg_t1').value=cfg.t1; document.getElementById('cfg_t2').value=cfg.t2; document.getElementById('cfg_modo').value=cfg.modo; const div=document.getElementById('cfg_pares'); div.innerHTML=''; PARES_ALL.forEach(p=>{const id='p_'+p.replace('/',''); div.innerHTML+=`<label><input type="checkbox" id="${id}" ${cfg.pares.includes(p)?'checked':''}> ${p}</label>`})}
+function fecharCfg(){document.getElementById('cfg').style.display='none'}
+function salvarCfg(){cfg.apikey=document.getElementById('cfg_apikey').value; cfg.lote=document.getElementById('cfg_lote').value; cfg.tp=+document.getElementById('cfg_tp').value; cfg.sl=+document.getElementById('cfg_sl').value; cfg.m1=document.getElementById('cfg_m1').value; cfg.m2=document.getElementById('cfg_m2').value; cfg.t1=document.getElementById('cfg_t1').value; cfg.t2=document.getElementById('cfg_t2').value; cfg.modo=+document.getElementById('cfg_modo').value; cfg.pares=PARES_ALL.filter(p=>document.getElementById('p_'+p.replace('/','')).checked); localStorage.setItem('forex_cfg',JSON.stringify(cfg)); atualizaUI(); fecharCfg(); log("Config salva")}
 
-function emJanela(){const h=new Date();const m=h.getHours()*60+h.getMinutes();return (m>=510&&m<=630)||(m>=870&&m<=990)}
-function ema(arr,p){const k=2/(p+1);let e=arr[0];for(let i=1;i<arr.length;i++)e=arr[i]*k+e*(1-k);return e}
-function rsi(c,p=14){let g=0,l=0;for(let i=1;i<=p;i++){const d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}const rs=g/(l||1);return 100-100/(1+rs)}
-function macd(c){const e12=ema(c.slice(-26),12),e26=ema(c.slice(-26),26);return e12-e26}
+async function ativar(){const p=await Notification.requestPermission();if(p==="granted"){ativo=true;document.getElementById('status').textContent="ATIVO";document.getElementById('status').className="badge ok";vibrar();await notificar("Forex Assist","Pronto");log("Ativo")}}
 
-async function buscar(par){
-  const s=par.replace("/","");const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${par.split("/")[0]}&to_symbol=${par.split("/")[1]}&interval=1min&apikey=${API_KEY}&outputsize=compact`;
-  const r=await fetch(url);const j=await r.json();const ts=j["Time Series FX (1min)"];if(!ts)throw "sem dados";
-  const k=Object.keys(ts).slice(0,60).reverse();const closes=k.map(x=>parseFloat(ts[x]["4. close"]));return {closes,ult:closes.at(-1)}
-}
+function emJanela(){const d=new Date();const m=d.getHours()*60+d.getMinutes();const toM=s=>+s.split(':')[0]*60+ +s.split(':')[1]; return (m>=toM(cfg.m1)&&m<=toM(cfg.m2))||(m>=toM(cfg.t1)&&m<=toM(cfg.t2))}
+function ema(a,p){const k=2/(p+1);let e=a[0];for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
+function rsi(c){let g=0,l=0;for(let i=1;i<=14;i++){const d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}const rs=g/(l||1);return 100-100/(1+rs)}
+
+async function buscar(par){const s=par.split('/');const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${s[0]}&to_symbol=${s[1]}&interval=1min&apikey=${cfg.apikey}&outputsize=compact`;const r=await fetch(url);const j=await r.json();const ts=j["Time Series FX (1min)"];if(!ts)throw"sem dados";const k=Object.keys(ts).slice(0,60).reverse();const closes=k.map(x=>+ts[x]["4. close"]);return {closes,price:closes.at(-1)}}
 
 async function analisar(){
-  if(!emJanela()){log("Fora da janela");return}
-  for(const p of PARES){
-    try{
-      const d=await buscar(p);const c=d.closes;
-      if(c.length<55) continue;
-      const e9=ema(c.slice(-20),9),e21=ema(c.slice(-30),21),e50=ema(c.slice(-55),50);
-      const r=rsi(c.slice(-15));const m=macd(c);
-      const tendenciaBuy=e9>e21&&e21>e50&&d.ult>e9;
-      const tendenciaSell=e9<e21&&e21<e50&&d.ult<e9;
-      const rsiOkBuy=r>=55&&r<=65;const rsiOkSell=r>=35&&r<=45;
-      let sinal=null;
-      if(tendenciaBuy&&rsiOkBuy&&m>0){sinal="BUY"}
-      else if(tendenciaSell&&rsiOkSell&&m<0){sinal="SELL"}
-      if(sinal){
-        const tp=(sinal==="BUY"?d.ult+0.0005:d.ult-0.0005).toFixed(5);
-        const sl=(sinal==="BUY"?d.ult-0.0005:d.ult+0.0005).toFixed(5);
-        vibrar([1000,500,1000,500,1000]);await notificar(`${sinal} ${p.replace("/","")}`,`Entrada ${d.ult.toFixed(5)} • TP ${tp} • SL ${sl} • Lote 0.04`);log(`${sinal} ${p} @ ${d.ult.toFixed(5)} | RSI ${r.toFixed(1)}`);
-      }else{log(`Sem sinal ${p} | RSI ${r.toFixed(1)}`)}
-      await new Promise(r=>setTimeout(r,12000)); // evita limite API
-    }catch(e){log(`Erro ${p}: ${e}`)}
-  }
+ if(!emJanela()){log("Fora da janela");return}
+ let melhor=null;
+ for(const p of cfg.pares){
+  try{
+   const d=await buscar(p);const c=d.closes; if(c.length<55){await new Promise(r=>setTimeout(r,14000));continue}
+   const e9=ema(c.slice(-20),9),e21=ema(c.slice(-30),21),e50=ema(c.slice(-55),50);
+   const r=rsi(c.slice(-15));const macd=ema(c.slice(-26),12)-ema(c.slice(-26),26);
+   const buy=e9>e21&&e21>e50&&d.price>e9&&r>=55&&r<=65&&macd>0;
+   const sell=e9<e21&&e21<e50&&d.price<e9&&r>=35&&r<=45&&macd<0;
+   if(buy||sell){const dir=buy?"BUY":"SELL"; const dist=Math.abs(e9-e21); const score=Math.min(100,Math.round((dist/d.price*10000)+ (buy?r-55:45-r) + Math.abs(macd*10000))); if(!melhor||score>melhor.score) melhor={par:p,dir,price:d.price,score,r};}
+   log(`${p} ok | RSI ${r.toFixed(1)}`); await new Promise(r=>setTimeout(r,14000));
+  }catch(e){log(`Erro ${p}`); await new Promise(r=>setTimeout(r,14000))}
+ }
+ if(melhor && melhor.score>=cfg.modo){
+   const tp=(melhor.dir==="BUY"?melhor.price+cfg.tp*0.0001:melhor.price-cfg.tp*0.0001).toFixed(5);
+   const sl=(melhor.dir==="BUY"?melhor.price-cfg.sl*0.0001:melhor.price+cfg.sl*0.0001).toFixed(5);
+   vibrar(); await notificar(`${melhor.dir} ${melhor.par.replace('/','')} • Score ${melhor.score}`,`Entrada ${melhor.price.toFixed(5)} • TP ${tp} • SL ${sl} • Lote ${cfg.lote}`);
+   trades.push({par:melhor.par,dir:melhor.dir,entry:melhor.price,tp:+tp,sl:+sl,time:Date.now(),result:null}); atualizaResumo(); log(`SINAL ${melhor.dir} ${melhor.par} score ${melhor.score}`);
+ } else { log("Sem oportunidade no ciclo") }
+ // checa trades abertos
+ for(const t of trades.filter(x=>!x.result)){try{const d=await buscar(t.par); if((t.dir==="BUY"&&d.price>=t.tp)||(t.dir==="SELL"&&d.price<=t.tp)){t.result="TP"} else if((t.dir==="BUY"&&d.price<=t.sl)||(t.dir==="SELL"&&d.price>=t.sl)){t.result="SL"} }catch{}} atualizaResumo();
 }
 
-function iniciar(){
-  if(!ativo){alert("Clique ATIVAR primeiro");return}
-  if(timer)clearInterval(timer);
-  log("Scanner iniciado");analisar();timer=setInterval(analisar,60000)
-}
+function iniciar(){if(!ativo){alert("Ative primeiro");return}if(timer)clearInterval(timer);log("Scanner iniciado");analisar();timer=setInterval(analisar, 1000*60*4)}
 </script>
 </body>
 </html>

@@ -1,6 +1,216 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Forex Assist v4.3 - Real Money</title>
@@ -8,21 +218,20 @@
 <meta name="theme-color" content="#0b1220">
 <style>
 body{font-family:system-ui,Arial;margin:0;padding:16px;background:#0b1220;color:#e5e7eb}
-h1{margin:0 0 12px;font-size:22px;display:flex;align-items:center;justify-content:space-between}
 .card{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:14px;margin-bottom:12px}
 button{width:100%;padding:14px;margin:6px 0;border:0;border-radius:10px;font-weight:700;font-size:16px}
 .primary{background:#2563eb;color:#fff}
 .warn{background:#dc2626;color:#fff}
 .muted{color:#9ca3af;font-size:13px}
-.log{height:200px;overflow:auto;background:#0a0f1c;border-radius:8px;padding:8px;font-family:monospace;font-size:12px}
+.log{height:220px;overflow:auto;background:#0a0f1c;border-radius:8px;padding:8px;font-family:monospace;font-size:12px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:6px}
 .ok{background:#065f46;color:#a7f3d0}
 .off{background:#7f1d1d;color:#fecaca}
 .gear{font-size:20px;background:none;border:0;color:#9ca3af;cursor:pointer}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px}
-.modal .box{background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;max-width:420px;width:100%;max-height:90vh;overflow:auto}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;padding:16px}
+.modal .box{background:#111827;border:1px solid #374151;border-radius:12px;padding:16px;max-width:440px;width:100%;max-height:90vh;overflow:auto}
 label{display:block;margin:8px 0 4px;font-size:13px;color:#d1d5db}
-input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #374151;background:#0b1220;color:#e5e7eb}
+input,select{width:100%;padding:9px;border-radius:8px;border:1px solid #374151;background:#0b1220;color:#e5e7eb}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .summary{display:flex;gap:12px;flex-wrap:wrap}
 .summary div{background:#0a0f1c;padding:8px 12px;border-radius:8px;font-size:13px}
@@ -53,7 +262,7 @@ input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #374151;b
 
 <div class="card">
   <div><b>Pares ativos</b> <span class="muted" id="paresInfo"></span></div>
-  <div class="muted">Filtros: EMA9>21>50 • RSI 55-65/35-45 • MACD • ADX>22 • 2 candles • delay 14s</div>
+  <div class="muted">Filtros: EMA9>21>50 • RSI 55-65/35-45 • MACD • ADX>22 • 2 candles • delay 14s • Dual API</div>
 </div>
 
 <div class="card">
@@ -64,23 +273,28 @@ input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #374151;b
 <div class="modal" id="cfg">
 <div class="box">
 <h3>Configurações</h3>
-<label>API Key Alpha Vantage</label><input id="cfg_apikey">
-<label>Lote</label><select id="cfg_lote"><option>0.01</option><option>0.02</option><option>0.04</option><option>0.05</option></select>
+<label>API Key TwelveData (principal)</label>
+<input id="cfgTwelve" placeholder="sua chave twelvedata">
+<label>API Key Alpha Vantage (backup)</label>
+<input id="cfgKey" placeholder="U2MTIJ03KGNL5K7T">
+<label>Lote</label>
+<select id="cfg_lote"><option>0.01</option><option>0.02</option><option>0.04</option><option>0.05</option></select>
 <div class="grid"><div><label>TP pips</label><input id="cfg_tp" type="number" value="5"></div><div><label>SL pips</label><input id="cfg_sl" type="number" value="5"></div></div>
 <label>Horário manhã</label><input id="cfg_m1" value="08:30"> - <input id="cfg_m2" value="10:30">
 <label>Horário tarde</label><input id="cfg_t1" value="14:30"> - <input id="cfg_t2" value="16:30">
 <label>Modo</label><select id="cfg_modo"><option value="75">Normal (score>75)</option><option value="85">Conservador (>85)</option><option value="65">Agressivo (>65)</option></select>
-<label>Pares (marque)</label><div id="cfg_pares" style="max-height:150px;overflow:auto;font-size:13px"></div>
+<label>Pares (marque)</label><div id="cfg_pares" style="max-height:160px;overflow:auto;font-size:13px"></div>
 <div style="display:flex;gap:8px;margin-top:12px"><button class="primary" onclick="salvarCfg()">Salvar</button><button onclick="fecharCfg()" style="background:#374151;color:#fff;border:0;padding:10px;border-radius:8px;flex:1">Fechar</button></div>
 </div></div>
 
 <script>
 const PARES_ALL = ["EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CAD","USD/CHF","NZD/USD","EUR/GBP","EUR/JPY","GBP/JPY","EUR/AUD","GBP/AUD","AUD/JPY","AUD/CAD"];
-let cfg = JSON.parse(localStorage.getItem('forex_cfg')||'{}');
-cfg.apikey = cfg.apikey || "U2MTIJ03KGNL5K7T";
-cfg.lote = cfg.lote || "0.04"; cfg.tp=cfg.tp||5; cfg.sl=cfg.sl||5;
-cfg.m1=cfg.m1||"08:30"; cfg.m2=cfg.m2||"10:30"; cfg.t1=cfg.t1||"14:30"; cfg.t2=cfg.t2||"16:30";
-cfg.modo=cfg.modo||75; cfg.pares=cfg.pares||PARES_ALL.slice(0,7);
+let CFG = JSON.parse(localStorage.getItem('forex_cfg_v433')||'{}');
+CFG.twelve = CFG.twelve || '0921a69006c6481baf8170d3ff7d97e6';
+CFG.apikey = CFG.apikey || 'U2MTIJ03KGNL5K7T';
+CFG.lote = CFG.lote || "0.04"; CFG.tp=CFG.tp||5; CFG.sl=CFG.sl||5;
+CFG.m1=CFG.m1||"08:30"; CFG.m2=CFG.m2||"10:30"; CFG.t1=CFG.t1||"14:30"; CFG.t2=CFG.t2||"16:30";
+CFG.modo=CFG.modo||75; CFG.pares=CFG.pares||PARES_ALL.slice(0,7);
 
 let ativo=false, timer=null, swReg=null, trades=JSON.parse(localStorage.getItem('forex_trades_'+new Date().toISOString().slice(0,10))||'[]');
 
@@ -90,47 +304,70 @@ async function notificar(t,b){try{if(swReg) await swReg.showNotification(t,{body
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').then(r=>{swReg=r;log("SW registrado")})}
 
-function atualizaUI(){document.getElementById('hshow').textContent=cfg.m1+"-"+cfg.m2+" e "+cfg.t1+"-"+cfg.t2; document.getElementById('lshow').textContent=cfg.lote; document.getElementById('tpshow').textContent=cfg.tp; document.getElementById('paresInfo').textContent=cfg.pares.length+" pares"; atualizaResumo()}
+function atualizaUI(){document.getElementById('hshow').textContent=CFG.m1+"-"+CFG.m2+" e "+CFG.t1+"-"+CFG.t2; document.getElementById('lshow').textContent=CFG.lote; document.getElementById('tpshow').textContent=CFG.tp; document.getElementById('paresInfo').textContent=CFG.pares.length+" pares"; atualizaResumo()}
 function atualizaResumo(){const tp=trades.filter(t=>t.result==='TP').length; const sl=trades.filter(t=>t.result==='SL').length; const tot=trades.length; const ac=tot?Math.round(tp/tot*100):0; document.getElementById('resumo').innerHTML=`<div>Sinais: ${tot}</div><div>TP: ${tp}</div><div>SL: ${sl}</div><div>Acerto: ${ac}%</div>`; localStorage.setItem('forex_trades_'+new Date().toISOString().slice(0,10), JSON.stringify(trades))}
 atualizaUI();
 
-function abrirCfg(){document.getElementById('cfg').style.display='flex'; document.getElementById('cfg_apikey').value=cfg.apikey; document.getElementById('cfg_lote').value=cfg.lote; document.getElementById('cfg_tp').value=cfg.tp; document.getElementById('cfg_sl').value=cfg.sl; document.getElementById('cfg_m1').value=cfg.m1; document.getElementById('cfg_m2').value=cfg.m2; document.getElementById('cfg_t1').value=cfg.t1; document.getElementById('cfg_t2').value=cfg.t2; document.getElementById('cfg_modo').value=cfg.modo; const div=document.getElementById('cfg_pares'); div.innerHTML=''; PARES_ALL.forEach(p=>{const id='p_'+p.replace('/',''); div.innerHTML+=`<label><input type="checkbox" id="${id}" ${cfg.pares.includes(p)?'checked':''}> ${p}</label>`})}
+function abrirCfg(){document.getElementById('cfg').style.display='flex'; document.getElementById('cfgTwelve').value=CFG.twelve; document.getElementById('cfgKey').value=CFG.apikey; document.getElementById('cfg_lote').value=CFG.lote; document.getElementById('cfg_tp').value=CFG.tp; document.getElementById('cfg_sl').value=CFG.sl; document.getElementById('cfg_m1').value=CFG.m1; document.getElementById('cfg_m2').value=CFG.m2; document.getElementById('cfg_t1').value=CFG.t1; document.getElementById('cfg_t2').value=CFG.t2; document.getElementById('cfg_modo').value=CFG.modo; const div=document.getElementById('cfg_pares'); div.innerHTML=''; PARES_ALL.forEach(p=>{const id='p_'+p.replace('/',''); div.innerHTML+=`<label><input type="checkbox" id="${id}" ${CFG.pares.includes(p)?'checked':''}> ${p}</label><br>`})}
 function fecharCfg(){document.getElementById('cfg').style.display='none'}
-function salvarCfg(){cfg.apikey=document.getElementById('cfg_apikey').value; cfg.lote=document.getElementById('cfg_lote').value; cfg.tp=+document.getElementById('cfg_tp').value; cfg.sl=+document.getElementById('cfg_sl').value; cfg.m1=document.getElementById('cfg_m1').value; cfg.m2=document.getElementById('cfg_m2').value; cfg.t1=document.getElementById('cfg_t1').value; cfg.t2=document.getElementById('cfg_t2').value; cfg.modo=+document.getElementById('cfg_modo').value; cfg.pares=PARES_ALL.filter(p=>document.getElementById('p_'+p.replace('/','')).checked); localStorage.setItem('forex_cfg',JSON.stringify(cfg)); atualizaUI(); fecharCfg(); log("Config salva")}
+function salvarCfg(){CFG.twelve=document.getElementById('cfgTwelve').value.trim(); CFG.apikey=document.getElementById('cfgKey').value.trim(); CFG.lote=document.getElementById('cfg_lote').value; CFG.tp=+document.getElementById('cfg_tp').value; CFG.sl=+document.getElementById('cfg_sl').value; CFG.m1=document.getElementById('cfg_m1').value; CFG.m2=document.getElementById('cfg_m2').value; CFG.t1=document.getElementById('cfg_t1').value; CFG.t2=document.getElementById('cfg_t2').value; CFG.modo=+document.getElementById('cfg_modo').value; CFG.pares=PARES_ALL.filter(p=>document.getElementById('p_'+p.replace('/','')).checked); localStorage.setItem('forex_cfg_v433',JSON.stringify(CFG)); atualizaUI(); fecharCfg(); log("Config salva - TW:"+CFG.twelve.slice(0,4)+"...")}
 
-async function ativar(){const p=await Notification.requestPermission();if(p==="granted"){ativo=true;document.getElementById('status').textContent="ATIVO";document.getElementById('status').className="badge ok";vibrar();await notificar("Forex Assist","Pronto");log("Ativo")}}
+async function ativar(){const p=await Notification.requestPermission();if(p==="granted"){ativo=true;document.getElementById('status').textContent="ATIVO";document.getElementById('status').className="badge ok";vibrar();await notificar("Forex Assist","Pronto - Dual API");log("Ativo")}}
 
-function emJanela(){const d=new Date();const m=d.getHours()*60+d.getMinutes();const toM=s=>+s.split(':')[0]*60+ +s.split(':')[1]; return (m>=toM(cfg.m1)&&m<=toM(cfg.m2))||(m>=toM(cfg.t1)&&m<=toM(cfg.t2))}
+function emJanela(){const d=new Date();const m=d.getHours()*60+d.getMinutes();const toM=s=>+s.split(':')[0]*60+ +s.split(':')[1]; return (m>=toM(CFG.m1)&&m<=toM(CFG.m2))||(m>=toM(CFG.t1)&&m<=toM(CFG.t2))}
 function ema(a,p){const k=2/(p+1);let e=a[0];for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
 function rsi(c){let g=0,l=0;for(let i=1;i<=14;i++){const d=c[i]-c[i-1];if(d>0)g+=d;else l-=d}const rs=g/(l||1);return 100-100/(1+rs)}
+function adx(h,l,c,p=14){let tr=[],dmP=[],dmN=[];for(let i=1;i<c.length;i++){const th=Math.max(h[i],c[i-1]), tl=Math.min(l[i],c[i-1]); tr.push(th-tl); const up=h[i]-h[i-1], dn=l[i-1]-l[i]; dmP.push(up>dn&&up>0?up:0); dmN.push(dn>up&&dn>0?dn:0)} const atr=ema(tr.slice(-p*2),p); const dp=ema(dmP.slice(-p*2),p)*100/(atr||1); const dn=ema(dmN.slice(-p*2),p)*100/(atr||1); const dx=Math.abs(dp-dn)/(dp+dn||1)*100; return dx}
 
-async function buscar(par){const s=par.split('/');const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${s[0]}&to_symbol=${s[1]}&interval=1min&apikey=${cfg.apikey}&outputsize=compact`;const r=await fetch(url);const j=await r.json();const ts=j["Time Series FX (1min)"];if(!ts)throw"sem dados";const k=Object.keys(ts).slice(0,60).reverse();const closes=k.map(x=>+ts[x]["4. close"]);return {closes,price:closes.at(-1)}}
-
-async function analisar(){
- if(!emJanela()){log("Fora da janela");return}
- let melhor=null;
- for(const p of cfg.pares){
+async function buscar(par){
+  // 1) TwelveData
   try{
-   const d=await buscar(p);const c=d.closes; if(c.length<55){await new Promise(r=>setTimeout(r,14000));continue}
-   const e9=ema(c.slice(-20),9),e21=ema(c.slice(-30),21),e50=ema(c.slice(-55),50);
-   const r=rsi(c.slice(-15));const macd=ema(c.slice(-26),12)-ema(c.slice(-26),26);
-   const buy=e9>e21&&e21>e50&&d.price>e9&&r>=55&&r<=65&&macd>0;
-   const sell=e9<e21&&e21<e50&&d.price<e9&&r>=35&&r<=45&&macd<0;
-   if(buy||sell){const dir=buy?"BUY":"SELL"; const dist=Math.abs(e9-e21); const score=Math.min(100,Math.round((dist/d.price*10000)+ (buy?r-55:45-r) + Math.abs(macd*10000))); if(!melhor||score>melhor.score) melhor={par:p,dir,price:d.price,score,r};}
-   log(`${p} ok | RSI ${r.toFixed(1)}`); await new Promise(r=>setTimeout(r,14000));
-  }catch(e){log(`Erro ${p}`); await new Promise(r=>setTimeout(r,14000))}
- }
- if(melhor && melhor.score>=cfg.modo){
-   const tp=(melhor.dir==="BUY"?melhor.price+cfg.tp*0.0001:melhor.price-cfg.tp*0.0001).toFixed(5);
-   const sl=(melhor.dir==="BUY"?melhor.price-cfg.sl*0.0001:melhor.price+cfg.sl*0.0001).toFixed(5);
-   vibrar(); await notificar(`${melhor.dir} ${melhor.par.replace('/','')} • Score ${melhor.score}`,`Entrada ${melhor.price.toFixed(5)} • TP ${tp} • SL ${sl} • Lote ${cfg.lote}`);
-   trades.push({par:melhor.par,dir:melhor.dir,entry:melhor.price,tp:+tp,sl:+sl,time:Date.now(),result:null}); atualizaResumo(); log(`SINAL ${melhor.dir} ${melhor.par} score ${melhor.score}`);
- } else { log("Sem oportunidade no ciclo") }
- // checa trades abertos
- for(const t of trades.filter(x=>!x.result)){try{const d=await buscar(t.par); if((t.dir==="BUY"&&d.price>=t.tp)||(t.dir==="SELL"&&d.price<=t.tp)){t.result="TP"} else if((t.dir==="BUY"&&d.price<=t.sl)||(t.dir==="SELL"&&d.price>=t.sl)){t.result="SL"} }catch{}} atualizaResumo();
+    const url=`https://api.twelvedata.com/time_series?symbol=${par}&interval=1min&outputsize=100&apikey=${CFG.twelve}`;
+    const r=await fetch(url); const j=await r.json();
+    if(j && j.values && j.values.length>60){
+      const vals=j.values.reverse();
+      const candles=vals.map(v=>({o:+v.open,h:+v.high,l:+v.low,c:+v.close}));
+      return {candles, src:'TW'};
+    }
+  }catch(e){}
+  // 2) Alpha fallback
+  try{
+    const [f,t]=par.split('/');
+    const url=`https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${f}&to_symbol=${t}&interval=1min&apikey=${CFG.apikey}&outputsize=compact`;
+    const r=await fetch(url); const j=await r.json(); const ts=j["Time Series FX (1min)"];
+    if(ts){ const ks=Object.keys(ts).reverse(); const candles=ks.map(k=>({o:+ts[k]["1. open"],h:+ts[k]["2. high"],l:+ts[k]["3. low"],c:+ts[k]["4. close"]})); return {candles, src:'AV'}; }
+  }catch(e){}
+  return null;
 }
 
-function iniciar(){if(!ativo){alert("Ative primeiro");return}if(timer)clearInterval(timer);log("Scanner iniciado");analisar();timer=setInterval(analisar, 1000*60*4)}
+async function analisar(){
+ if(!ativo) return;
+ if(!emJanela()){log("Fora da janela");return}
+ let melhor=null;
+ for(const p of CFG.pares){
+  try{
+   const d=await buscar(p); if(!d||d.candles.length<60){log(`Erro ${p} (TW+AV)`); await new Promise(r=>setTimeout(r,14000)); continue}
+   const c=d.candles.map(x=>x.c); const h=d.candles.map(x=>x.h); const l=d.candles.map(x=>x.l);
+   const e9=ema(c.slice(-20),9), e21=ema(c.slice(-30),21), e50=ema(c.slice(-55),50);
+   const r=rsi(c.slice(-15)); const macd=ema(c.slice(-26),12)-ema(c.slice(-26),26); const adxV=adx(h,l,c);
+   const buy=e9>e21&&e21>e50&&c.at(-1)>e9&&r>=55&&r<=65&&macd>0&&adxV>22;
+   const sell=e9<e21&&e21<e50&&c.at(-1)<e9&&r>=35&&r<=45&&macd<0&&adxV>22;
+   const conf2 = (c.at(-1)>c.at(-2)) === (c.at(-2)>c.at(-3));
+   if((buy||sell)&&conf2){ const dir=buy?"BUY":"SELL"; const score=Math.min(100,Math.round(50+Math.abs(e9-e21)*10000 + Math.abs(macd*5000) + (adxV-22))); if(!melhor||score>melhor.score) melhor={par:p,dir,price:c.at(-1),score,r,src:d.src};}
+   log(`${p} ${d.src} | RSI ${r.toFixed(1)} ADX ${adxV.toFixed(0)}`); await new Promise(r=>setTimeout(r,14000));
+  }catch(e){log(`Erro ${p}`); await new Promise(r=>setTimeout(r,14000))}
+ }
+ if(melhor && melhor.score>=CFG.modo){
+   const tp=(melhor.dir==="BUY"?melhor.price+CFG.tp*0.0001:melhor.price-CFG.tp*0.0001).toFixed(5);
+   const sl=(melhor.dir==="BUY"?melhor.price-CFG.sl*0.0001:melhor.price+CFG.sl*0.0001).toFixed(5);
+   vibrar(); await notificar(`${melhor.dir} ${melhor.par} • ${melhor.src}`,`Entrada ${melhor.price.toFixed(5)} • Score ${melhor.score} • TP ${tp} SL ${sl}`);
+   trades.push({par:melhor.par,dir:melhor.dir,entry:melhor.price,tp:+tp,sl:+sl,time:Date.now(),result:null,src:melhor.src}); atualizaResumo(); log(`SINAL ${melhor.dir} ${melhor.par} ${melhor.src} score ${melhor.score}`);
+ } else { log("Sem oportunidade no ciclo") }
+ // checa TP/SL
+ for(const t of trades.filter(x=>!x.result)){try{const d=await buscar(t.par); if(!d) continue; const pr=d.candles.at(-1).c; if((t.dir==="BUY"&&pr>=t.tp)||(t.dir==="SELL"&&pr<=t.tp)){t.result="TP"; vibrar(); await notificar(`TP ${t.par}`,"Fechou no alvo")} else if((t.dir==="BUY"&&pr<=t.sl)||(t.dir==="SELL"&&pr>=t.sl)){t.result="SL"; vibrar(); await notificar(`SL ${t.par}`,"Fechou no stop")} }catch{}} atualizaResumo();
+}
+
+function iniciar(){if(!ativo){alert("Ative primeiro");return}if(timer)clearInterval(timer);log("Scanner iniciado - Dual API");analisar();timer=setInterval(analisar, 1000*60*4)}
 </script>
 </body>
 </html>

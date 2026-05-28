@@ -374,22 +374,16 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 </div>
 
 <script>
-// limpa workers antigos (v4.4e, v4.4n)
+
 if('serviceWorker' in navigator){
   navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(r=>{ if(true) r.unregister(); });
+    regs.forEach(r=>{ r.unregister(); });
   });
+  const swCode = `self.addEventListener('notificationclick', e => { e.notification.close(); const url='intent://#Intent;package=com.xm.webapp;scheme=xm;end'; e.waitUntil(clients.openWindow(url)); }); self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('activate', e => self.clients.claim());`;
+  const blob = new Blob([swCode],{type:'text/javascript'});
+  navigator.serviceWorker.register(URL.createObjectURL(blob));
 }
-
-const $=s=>document.querySelector(s);
-const timeSP=()=>new Date().toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour12:false});
-
-let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, wakeLock=null, backoffUntil=0, scanning=false, tdKeyIndex=0, cycleCount=0, openSignals=[];
-const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
-
-function loadSettings(){
-  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'normal',delay:60,lote:0.04,tp:5,sl:5};
-  try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v44p')||'{}')}}catch{return d}
+catch{return d}
 }
 function saveSettingsLS(){localStorage.setItem('fa_settings_v44p',JSON.stringify(settings))}
 

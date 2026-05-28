@@ -213,7 +213,7 @@
 </script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Forex Assist v4.4f v4.4e</title>
+<title>Forex Assist v4.4k v4.4e</title>
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIkZvcmV4IEFzc2lzdCB2NC40ZSAtIFJlYWwgTW9uZXkiLAogICJzaG9ydF9uYW1lIjogIkZvcmV4QXNzaXN0IiwKICAic3RhcnRfdXJsIjogIi4vP3Y9NDRlIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMGEwZjFjIiwKICAidGhlbWVfY29sb3IiOiAiIzBhMGYxYyIsCiAgImljb25zIjogW3sic3JjIjogImljb24tNTEyLnBuZyIsInNpemVzIjoiNTEyeDUxMiIsInR5cGUiOiJpbWFnZS9wbmcifV0KfQ==">
 <link rel="apple-touch-icon" href="icon-512.png">
@@ -273,12 +273,12 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 <div class="app">
   <header>
     <div>
-      <div class="title">Forex Assist v4.4f</div>
-      <div class="subtitle">Real Money ALL DAY <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
+      <div class="title">Forex Assist v4.4k</div>
+      <div class="subtitle">Real Money v4.4k ALL DAY <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
     </div>
     <div style="display:flex;gap:9px;align-items:center">
       <span id="badge" class="badge desativado">DESATIVADO</span>
-      <button id="btnSettings" class="icon-btn" aria-label="Configurações">
+      <button id="btnSettings" class="icon-btn" aria-label="Configurações" onclick="document.getElementById('settingsModal').classList.add('show')">
         <span style="font-size:22px">⚙️</span>
       </button>
     </div>
@@ -477,7 +477,7 @@ function processPair(pair,data){
   if(dir){
     addLog(`[${timeSP()}] <span onclick="navigator.clipboard.writeText('${pair}');window.location.href='market://launch?id=com.xm.webapp'" style="cursor:pointer;text-decoration:underline">SINAL ${dir} ${pair} score ${score} → Abrir XM</span>`,'signal');
     trades.sinais++;localStorage.setItem(todayKey,JSON.stringify(trades));updateResumo();
-    if(navigator.vibrate)navigator.vibrate([500,200,500,200,1000]);
+    if(navigator.vibrate)navigator.vibrate([200,100,200]);
     if(window.Notification&&Notification.permission==='granted'){
       try{const n=new Notification(`Forex Assist • ${pair} ${dir}`,{body:`Score ${score} • TP $${settings.tp} SL $${settings.sl} • Lote ${settings.lote} • Toque para XM`}); n.onclick=()=>{window.open('intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.xm.webapp;end','_blank')}}catch{}
     }
@@ -555,36 +555,37 @@ function saveSettings(){
 }
 async function requestNotif(){
   if(!('Notification' in window))return alert('Notificações não suportadas');
-  const p=await Notification.requestPermission(); addLog(`[${timeSP()}] Permissão notificação: ${p}`);
+  const p=await Notification.requestPermission();
   if(p==='granted'){addLog(`[${timeSP()}] Notificações ativadas`);$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS';$('#btnNotify').disabled=true}
 }
 
 
-async async function processOpenSignals(){
+async function processOpenSignals(){
   if(!openSignals.length) return;
-  const keys=[settings.twKey,settings.twKey2,settings.twKey3].filter(Boolean);
-  for(let idx=0; idx<openSignals.length; idx++){
-    const s=openSignals[idx]; if(!s.tpPrice) continue;
-    try{
-      const start=new Date(s.time).toISOString().slice(0,19).replace('T',' ');
-      let data=null;
-      for(const k of keys){
-        const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=1min&start_date=${start}&outputsize=300&apikey=${k}`;
-        const r=await fetch(url); const j=await r.json(); if(j.values){ data=j.values; break; }
+  // evita travar: processa só o mais antigo por vez
+  const s = openSignals[0];
+  const key = settings.twKey || settings.twKey2 || settings.twKey3;
+  if(!key || !s.tpPrice) { openSignals.shift(); localStorage.setItem('fa_signals_open', JSON.stringify(openSignals)); return; }
+  try{
+    const start = new Date(s.time).toISOString().replace('T',' ').substring(0,19);
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=1min&start_date=${start}&outputsize=500&apikey=${key}`;
+    const r = await fetch(url); const j = await r.json();
+    if(!j.values) return;
+    const candles = j.values.reverse();
+    for(const c of candles){
+      const h=parseFloat(c.high), l=parseFloat(c.low);
+      const hora = c.datetime.split(' ')[1].substring(0,5);
+      if(s.dir==='BUY'){
+        if(h>=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +$${settings.tp} (sinal ${s.timeStr})`,'success'); trades.tp++; openSignals.shift(); break; }
+        if(l<=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -$${settings.sl} (sinal ${s.timeStr})`,'error'); trades.sl++; openSignals.shift(); break; }
+      }else{
+        if(l<=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +$${settings.tp} (sinal ${s.timeStr})`,'success'); trades.tp++; openSignals.shift(); break; }
+        if(h>=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -$${settings.sl} (sinal ${s.timeStr})`,'error'); trades.sl++; openSignals.shift(); break; }
       }
-      if(!data) continue;
-      for(const c of data.reverse()){
-        const h=parseFloat(c.high), l=parseFloat(c.low), hora=c.datetime.split(' ')[1].slice(0,5);
-        if(s.dir==='BUY' && h>=s.tpPrice){ addLog(`[${hora}] ${s.pair} WIN`, 'success'); trades.tp++; openSignals.splice(idx,1); idx--; break; }
-        if(s.dir==='BUY' && l<=s.slPrice){ addLog(`[${hora}] ${s.pair} LOSS`, 'error'); trades.sl++; openSignals.splice(idx,1); idx--; break; }
-        if(s.dir==='SELL' && l<=s.tpPrice){ addLog(`[${hora}] ${s.pair} WIN`, 'success'); trades.tp++; openSignals.splice(idx,1); idx--; break; }
-        if(s.dir==='SELL' && h>=s.slPrice){ addLog(`[${hora}] ${s.pair} LOSS`, 'error'); trades.sl++; openSignals.splice(idx,1); idx--; break; }
-      }
-    }catch(e){}
-  }
-  localStorage.setItem(todayKey, JSON.stringify(trades));
+    }
+    localStorage.setItem(todayKey, JSON.stringify(trades)); updateResumo();
+  }catch(e){}
   localStorage.setItem('fa_signals_open', JSON.stringify(openSignals));
-  updateResumo();
 }
 
 function init(){
@@ -596,7 +597,7 @@ function init(){
   openSignals=JSON.parse(localStorage.getItem('fa_signals_open')||'[]');
   logEntries=JSON.parse(localStorage.getItem('fa_log_v435')||'[]');
   updateInfoLine();updatePairsUI();updateResumo();renderLog();
-  setTimeout(processOpenSignals,3000); setInterval(()=>{if(scannerActive) processOpenSignals();},30000);
+  setTimeout(processOpenSignals,3000);
   $('#btnSettings').onclick=openSettings;
   $('#closeSettings').onclick=()=>$('#settingsModal').classList.remove('show');
   $('#saveSettings').onclick=saveSettings;
@@ -607,7 +608,7 @@ function init(){
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
-  addLog(`[${timeSP()}] Forex Assist v4.4j pronto`);
+  addLog(`[${timeSP()}] Forex Assist v4.4k pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

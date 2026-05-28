@@ -350,32 +350,41 @@ async function requestNotif(){
 }
 
 
-async function processOpenSignals(){
+async async function processOpenSignals(){
   if(!openSignals.length) return;
-  // evita travar: processa só o mais antigo por vez
-  const s = openSignals[0];
-  const key = settings.twKey || settings.twKey2 || settings.twKey3;
-  if(!key || !s.tpPrice) { openSignals.shift(); localStorage.setItem('fa_signals_open', JSON.stringify(openSignals)); return; }
-  try{
-    const start = new Date(s.time).toISOString().replace('T',' ').substring(0,19);
-    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=1min&start_date=${start}&outputsize=500&apikey=${key}`;
-    const r = await fetch(url); const j = await r.json();
-    if(!j.values) return;
-    const candles = j.values.reverse();
-    for(const c of candles){
-      const h=parseFloat(c.high), l=parseFloat(c.low);
-      const hora = c.datetime.split(' ')[1].substring(0,5);
-      if(s.dir==='BUY'){
-        if(h>=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +$${settings.tp} (sinal ${s.timeStr})`,'success'); trades.tp++; openSignals.shift(); break; }
-        if(l<=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -$${settings.sl} (sinal ${s.timeStr})`,'error'); trades.sl++; openSignals.shift(); break; }
-      }else{
-        if(l<=s.tpPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} WIN +$${settings.tp} (sinal ${s.timeStr})`,'success'); trades.tp++; openSignals.shift(); break; }
-        if(h>=s.slPrice){ addLog(`[${hora}] RESULTADO ${s.dir} ${s.pair} LOSS -$${settings.sl} (sinal ${s.timeStr})`,'error'); trades.sl++; openSignals.shift(); break; }
+  const keys=[settings.twKey,settings.twKey2,settings.twKey3].filter(Boolean);
+  if(!keys.length) return;
+  // processa todos os sinais pendentes, do mais antigo ao mais novo
+  for(let i=0;i<openSignals.length;i++){
+    const s=openSignals[i];
+    if(!s.tpPrice) continue;
+    try{
+      const start=new Date(s.time).toISOString().slice(0,19).replace('T',' ');
+      let j=null;
+      for(const key of keys){
+        const url=`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(s.pair)}&interval=1min&start_date=${start}&outputsize=500&apikey=${key}`;
+        const r=await fetch(url); j=await r.json(); if(j && j.values) break;
       }
-    }
-    localStorage.setItem(todayKey, JSON.stringify(trades)); updateResumo();
-  }catch(e){}
+      if(!j || !j.values){ addLog(`[${timeSP()}] TW sem dados p/ ${s.pair}`,'warn'); continue; }
+      const candles=j.values.reverse();
+      let fechou=false;
+      for(const c of candles){
+        const h=parseFloat(c.high), l=parseFloat(c.low);
+        const hora=c.datetime.split(' ')[1].substring(0,5);
+        if(s.dir==='BUY'){
+          if(h>=s.tpPrice){ addLog(`[${hora}] ${s.pair} WIN +$${settings.tp}`,'success'); trades.tp++; fechou=true; break; }
+          if(l<=s.slPrice){ addLog(`[${hora}] ${s.pair} LOSS -$${settings.sl}`,'error'); trades.sl++; fechou=true; break; }
+        }else{
+          if(l<=s.tpPrice){ addLog(`[${hora}] ${s.pair} WIN +$${settings.tp}`,'success'); trades.tp++; fechou=true; break; }
+          if(h>=s.slPrice){ addLog(`[${hora}] ${s.pair} LOSS -$${settings.sl}`,'error'); trades.sl++; fechou=true; break; }
+        }
+      }
+      if(fechou){ openSignals.splice(i,1); i--; }
+    }catch(e){ addLog(`[${timeSP()}] Erro check ${s.pair}: ${e.message}`,'error'); }
+  }
+  localStorage.setItem(todayKey, JSON.stringify(trades));
   localStorage.setItem('fa_signals_open', JSON.stringify(openSignals));
+  updateResumo();
 }
 
 function init(){
@@ -387,7 +396,7 @@ function init(){
   openSignals=JSON.parse(localStorage.getItem('fa_signals_open')||'[]');
   logEntries=JSON.parse(localStorage.getItem('fa_log_v435')||'[]');
   updateInfoLine();updatePairsUI();updateResumo();renderLog();
-  setTimeout(processOpenSignals,3000);
+  setTimeout(processOpenSignals,3000); setInterval(()=>{if(scannerActive) processOpenSignals();},30000);
   $('#btnSettings').onclick=openSettings;
   $('#closeSettings').onclick=()=>$('#settingsModal').classList.remove('show');
   $('#saveSettings').onclick=saveSettings;
@@ -398,7 +407,7 @@ function init(){
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
   if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>{});self.addEventListener('fetch',e=>{})`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
-  addLog(`[${timeSP()}] Forex Assist v4.4h pronto`);
+  addLog(`[${timeSP()}] Forex Assist v4.4i pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

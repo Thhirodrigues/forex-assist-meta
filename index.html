@@ -215,7 +215,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Forex Assist - Real Money</title>
 <meta name="theme-color" content="#0f172a">
-<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIkZvcmV4IEFzc2lzdCAtIFJlYWwgTW9uZXkiLCAic2hvcnRfbmFtZSI6ICJSZWFsIE1vbmV5IiwgInN0YXJ0X3VybCI6ICIuLz92PXN0YWJsZSIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjMGEwZjFjIiwgInRoZW1lX2NvbG9yIjogIiMwYTBmMWMiLCAiaWNvbnMiOiBbeyJzcmMiOiAiaWNvbi01MTIucG5nIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9wbmciLCAicHVycG9zZSI6ICJhbnkgbWFza2FibGUifV19">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIkZvcmV4IEFzc2lzdCAtIFJlYWwgTW9uZXkiLCAic2hvcnRfbmFtZSI6ICJSZWFsIE1vbmV5IiwgInN0YXJ0X3VybCI6ICIuLz92PXAiLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgImJhY2tncm91bmRfY29sb3IiOiAiIzBhMGYxYyIsICJ0aGVtZV9jb2xvciI6ICIjMGEwZjFjIiwgImljb25zIjogW3sic3JjIjogImljb24tNTEyLnBuZyIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2UvcG5nIiwgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIn1dfQ==">
 <link rel="apple-touch-icon" href="icon-512.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <style>
@@ -273,8 +273,8 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 <div class="app">
   <header>
     <div>
-      <div class="title">Forex Assist - Real Money</div>
-      <div class="subtitle">Real Money  <img src="icon-512.png" alt="" style="height:14px;width:14px;vertical-align:-2px;margin-left:4px;opacity:.9"></div>
+      <div class="title">Forex Assist</div>
+      <div class="subtitle" style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px">Real Money <img src="icon-512.png" alt="" style="height:18px;width:18px;vertical-align:middle;opacity:1"></div>
     </div>
     <div style="display:flex;gap:9px;align-items:center">
       <span id="badge" class="badge desativado">DESATIVADO</span>
@@ -287,7 +287,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
   <button id="btnNotify" class="btn btn-blue">ATIVAR NOTIFICAÇÕES</button>
   <button id="btnScanner" class="btn btn-green">INICIAR SCANNER</button>
 
-  <div id="infoLine" class="info">Horários: 07:30-18:00 • Lote 0.04 • TP/SL 5 pips</div>
+  <div id="infoLine" class="info">Horários: 07:30-18:00 • Lote 0.04 • TP/SL $5/$5</div>
 
   <div class="cards">
     <div class="card"><div id="statSinais" class="card-value">0</div><div class="card-label">Sinais</div></div>
@@ -366,7 +366,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
       <div><label>TP ($)</label><input id="tp" type="number" class="input" value="5"></div>
       <div><label>SL ($)</label><input id="sl" type="number" class="input" value="5"></div>
     </div>
-    <div class="small">Horário operacional: 00:00-23:59 (America/Sao_Paulo)</div>
+    <div class="small">Horário operacional: 07:30-18:00 (America/Sao_Paulo)</div>
 
     <button id="saveSettings" class="btn btn-blue" style="margin-top:16px">Salvar</button>
     <button id="clearSignals" class="btn" style="margin-top:8px;background:#334155;border:1px solid #475569">Limpar sinais pendentes</button>
@@ -374,17 +374,10 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
 </div>
 
 <script>
-// solicita permissão na inicialização
-document.addEventListener('DOMContentLoaded',()=>{
-  if('Notification' in window && Notification.permission==='default'){
-    Notification.requestPermission();
-  }
-});
-
-// limpa workers antigos (v4.4e, )
-if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));
+// limpa workers antigos (v4.4e, v4.4n)
+if('serviceWorker' in navigator){
   navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(r=>{ if(!r.scope.includes('v=44n')) r.unregister(); });
+    regs.forEach(r=>{ if(true) r.unregister(); });
   });
 }
 
@@ -395,13 +388,13 @@ let settings, trades, logEntries=[], scannerActive=false, scannerInterval=null, 
 const todayKey='fa_trades_'+new Date().toLocaleDateString('sv-SE');
 
 function loadSettings(){
-  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'conservador',delay:55,lote:0.04,tp:5,sl:5};
-  try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v435')||'{}')}}catch{return d}
+  const d={twKey:"0921a1b1e8d4469cbe7c8697a4e62a85",twKey2:"31629773166e45c09ddcda8bb23dbdae",twKey3:"011b938585f545b1819cab1a8306decb",avKey:"",pairsActive:['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD','NZD/USD','USD/CHF'],mode:'normal',delay:60,lote:0.04,tp:5,sl:5};
+  try{return {...d,...JSON.parse(localStorage.getItem('fa_settings_v44p')||'{}')}}catch{return d}
 }
-function saveSettingsLS(){localStorage.setItem('fa_settings_v435',JSON.stringify(settings))}
+function saveSettingsLS(){localStorage.setItem('fa_settings_v44p',JSON.stringify(settings))}
 
 function updateInfoLine(){
-  $('#infoLine').textContent=`Horários: 00:00-23:59 • Lote ${settings.lote} • TP/SL $${settings.tp}/$${settings.sl}`;
+  $('#infoLine').textContent=`Horários: 07:30-18:00 • Lote ${settings.lote} • TP/SL $${settings.tp}/$${settings.sl}`;
 }
 function updatePairsUI(){
   $('#pairCount').textContent=`${settings.pairsActive.length}/14`;
@@ -418,7 +411,7 @@ function addLog(text,type=''){
   const e={t:Date.now(),text,type};
   logEntries.push(e);
   if(logEntries.length>200)logEntries.shift();
-  localStorage.setItem('fa_log_v435',JSON.stringify(logEntries));
+  localStorage.setItem('fa_log_v44p',JSON.stringify(logEntries));
   renderLogEntry(e);
 }
 function renderLogEntry(e){
@@ -538,28 +531,7 @@ async function scanCycle(){
   }finally{scanning=false}
 }
 
-async 
-let scanTick=0, lastScan=Date.now();
-const mainPairs=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD'];
-function scanOnce(){
-  try{
-    const active = settings.pairs.filter(p=>p.active);
-    const mains = active.filter(p=>mainPairs.includes(p.name));
-    const others = active.filter(p=>!mainPairs.includes(p.name));
-    const toScan = [...mains, ...(scanTick%5===0?others:[])];
-    toScan.forEach(async (pairObj)=>{
-      try{
-        await fetchPairData(pairObj.name);
-        lastScan=Date.now();
-      }catch(e){ log(`${pairObj.name} erro fetch`); }
-    });
-    scanTick++;
-  }catch(e){ log('scan erro geral'); }
-}
-// watchdog
-setInterval(()=>{ if(Date.now()-lastScan>60000 && scanning){ log('watchdog reiniciando'); stopScanner(); startScanner(); } },15000);
-
-function startScanner(){
+async function startScanner(){
   if(scannerActive)return;
   scannerActive=true;setActive(true);
   $('#btnScanner').textContent='PARAR SCANNER';$('#btnScanner').className='btn btn-red';
@@ -640,7 +612,7 @@ function init(){
   settings=loadSettings();
   trades=JSON.parse(localStorage.getItem(todayKey)||'{"sinais":0,"tp":0,"sl":0}');
   openSignals=JSON.parse(localStorage.getItem('fa_signals_open')||'[]');
-  logEntries=JSON.parse(localStorage.getItem('fa_log_v435')||'[]');
+  logEntries=JSON.parse(localStorage.getItem('fa_log_v44p')||'[]');
   updateInfoLine();updatePairsUI();updateResumo();renderLog();
   setTimeout(processOpenSignals,3000);
   $('#btnSettings').onclick=openSettings;
@@ -648,11 +620,11 @@ function init(){
   $('#saveSettings').onclick=saveSettings;
   $('#btnNotify').onclick=requestNotif;
   $('#btnScanner').onclick=()=>scannerActive?stopScanner():startScanner();
-  $('#clearLog').onclick=()=>{logEntries=[];localStorage.removeItem('fa_log_v435');$('#log').innerHTML=''};
+  $('#clearLog').onclick=()=>{logEntries=[];localStorage.removeItem('fa_log_v44p');$('#log').innerHTML=''};
   if('Notification' in window && Notification.permission==='granted'){$('#btnNotify').textContent='NOTIFICAÇÕES ATIVAS';$('#btnNotify').disabled=true}
   $('#settingsModal').addEventListener('click',e=>{if(e.target.id==='settingsModal')e.currentTarget.classList.remove('show')});
   document.addEventListener('visibilitychange',async()=>{if(scannerActive&&document.visibilityState==='visible'&&'wakeLock' in navigator&&!wakeLock){try{wakeLock=await navigator.wakeLock.request('screen')}catch{}}});
-  if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister()));const code=`self.addEventListener('install',e=>{self.skipWaiting()});self.addEventListener('activate',e=>{self.clients.claim()});self.addEventListener('notificationclick',e=>{e.notification.close();const u=e.notification.data&&e.notification.data.url?e.notification.data.url:'intent://#Intent;package=com.xm.webapp;scheme=xm;end';e.waitUntil(clients.openWindow(u))});`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
+  if('serviceWorker' in navigator){const code=`self.addEventListener('install',e=>{self.skipWaiting()});self.addEventListener('activate',e=>{self.clients.claim()});self.addEventListener('notificationclick',e=>{e.notification.close();const u=e.notification.data&&e.notification.data.url?e.notification.data.url:'intent://#Intent;package=com.xm.webapp;scheme=xm;end';e.waitUntil(clients.openWindow(u))});`;const blob=new Blob([code],{type:'text/javascript'});navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{})}
   addLog(`[${timeSP()}] Forex Assist - Real Money pronto`);
 }
 document.addEventListener('DOMContentLoaded',init);

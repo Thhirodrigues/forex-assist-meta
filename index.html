@@ -1,6 +1,216 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Forex Assist - Real Money</title>
@@ -71,6 +281,9 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
       <button id="btnSettings" class="icon-btn" aria-label="Configurações" onclick="document.getElementById('settingsModal').classList.add('show')">
         <span style="font-size:22px">⚙️</span>
       </button>
+      <button id="btnManual" class="icon-btn" aria-label="Manual" onclick="document.getElementById('manualModal').classList.add('show')">
+        <span style="font-size:22px">📘</span>
+      </button>
     </div>
   </header>
 
@@ -140,7 +353,7 @@ label{font-size:12.5px;color:#cbd5e1;font-weight:600;display:block;margin-top:10
     <div class="grid-2">
       <div>
         <label>Modo</label>
-        <select id="mode" class="input">
+        <select id="mode" class="input" onchange="if(this.value==='expert'){document.getElementById('delay').value=120}">
           <option value="moderado">Moderado (>80)</option>
           <option value="normal">Normal (>75)</option>
           <option value="expert">Expert (4 confluências)</option>
@@ -211,7 +424,7 @@ function renderLogEntry(e){
   l.appendChild(d);
   l.scrollTop=l.scrollHeight;
 }
-function renderLog(){ const logBox=$('#log'); if(settings.mode==='expert' && logExpert.length){ logBox.innerHTML=logExpert.map(e=>`<div>${e}</div>`).join(''); return; } $('#log').innerHTML=''; logEntries.forEach(renderLogEntry) }
+function renderLog(){ const logBox=$('#log'); if(settings.mode==='expert'){ if(logExpert.length===0){ logBox.innerHTML='<div>[Modo Expert ativo] Aguardando análise...</div>'; } else { logBox.innerHTML=logExpert.map(e=>`<div>${e}</div>`).join(''); } return; } $('#log').innerHTML=''; logEntries.forEach(renderLogEntry) }
 function setActive(a){ const b=$('#badge'); b.textContent=a?'ATIVO':'DESATIVADO'; b.className='badge '+(a?'ativo':'desativado') }
 function inWindow(){ return true }
 
@@ -355,7 +568,7 @@ function saveSettings(){
   settings.twKey2=$('#twKey2').value.trim()||settings.twKey2;
   settings.twKey3=$('#twKey3').value.trim()||settings.twKey3;
   settings.avKey=$('#avKey').value.trim();
-  settings.mode=$('#mode').value;
+  settings.mode=$('#mode').value; if(settings.mode==='expert'){ settings.delay=120; $('#delay').value=120; }
   settings.delay=Math.max(10,parseInt($('#delay').value)||25);
   settings.lote=parseFloat($('#lote').value)||0.04;
   settings.tp=parseInt($('#tp').value)||5;
@@ -425,5 +638,25 @@ function init(){
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>
+
+<div id="manualModal" class="modal">
+  <div class="modal-content" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Manual de Estudo</h3>
+      <button onclick="document.getElementById('manualModal').classList.remove('show')" style="background:none;border:none;color:#fff;font-size:22px">×</button>
+    </div>
+    <div style="font-size:14px;line-height:1.5;max-height:60vh;overflow:auto">
+      <p><b>RSI (Índice de Força Relativa)</b><br>35-45 = região de venda (pullback em baixa) • 55-65 = região de compra • Fora disso = extremo, evitar</p>
+      <p><b>ADX (Índice Direcional)</b><br>>25 = tendência forte • 20-25 = moderada • <20 = lateral (sem sinal no Expert)</p>
+      <p><b>EMA 9/21/50</b><br>Compra: 9>21>50 alinhadas • Venda: 9<21<50 • Sem alinhamento = sem confluência</p>
+      <p><b>MACD</b><br>Linha MACD acima do sinal = momentum comprador • Abaixo = vendedor</p>
+      <p><b>Momentum 3 candles</b><br>3 fechamentos seguidos na mesma direção = confirmação</p>
+      <p><b>Score</b><br>Cada confluência vale 20pts (máx 100). Moderado precisa 80, Normal 75, Expert 85</p>
+      <p><b>Modo Expert</b><br>Força delay 120s, exige ADX>25, score 85+, e loga REJEITADO com motivo. Pensa como dinheiro próprio: qualidade > quantidade</p>
+      <p><b>Log Expert</b><br>Quando Expert está ativo, o log principal mostra apenas ACEITO/REJEITADO. O log normal volta ao trocar de modo.</p>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
